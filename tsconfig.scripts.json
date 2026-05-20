@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "isolatedModules": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "jsx": "react"
+  },
+  "include": ["scripts/**/*.ts"],
+  "exclude": ["node_modules"]
+}

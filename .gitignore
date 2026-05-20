@@ -1,0 +1,62 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Python virtual environments (infrastructure CDK)
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+cdk.out/
+
+# npm local cache
+.npm-cache/
+
+# IDE / editor local configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Kiro local state
+.kiro/.meta.json
+
+# CDK outputs (generated)
+infrastructure/demo-app/cdk.out/
+infrastructure/openemr/cdk.out/
+
+# OS files
+Thumbs.db
