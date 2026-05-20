@@ -51,8 +51,8 @@ cdk.out/
 *.swp
 *.swo
 
-# Kiro local state
-.kiro/.meta.json
+# Kiro
+.kiro/
 
 # CDK outputs (generated)
 infrastructure/demo-app/cdk.out/
