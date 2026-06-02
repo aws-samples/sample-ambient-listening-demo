@@ -129,6 +129,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patientId, patientContext }),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -155,6 +156,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
     try {
       const response = await fetch(`/api/sessions/${state.session.sessionId}/end`, {
         method: 'POST',
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -162,13 +164,63 @@ export function SessionProvider({ children }: SessionProviderProps) {
         throw new Error(errorData.message || `Session end failed with status ${response.status}`);
       }
 
-      const session: AmbientSession = await response.json();
-      dispatch({ type: 'END_SESSION_SUCCESS', payload: session });
+      const endData = await response.json();
+      const endedSession: AmbientSession = {
+        ...state.session,
+        status: 'ended',
+        endedAt: endData.endedAt ? new Date(endData.endedAt) : new Date(),
+      };
+      dispatch({ type: 'END_SESSION_SUCCESS', payload: endedSession });
+
+      // After session ends, poll for outputs
+      console.log('[Session] Polling for outputs:', state.session.sessionId, state.session.domainId, state.session.subscriptionId);
+      pollForOutputs(state.session.sessionId, state.session.domainId, state.session.subscriptionId);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An unexpected error occurred';
       dispatch({ type: 'END_SESSION_FAILURE', payload: message });
     }
   }, [state.session]);
+
+  /**
+   * Polls the outputs API for clinical note and after-visit summary.
+   * Retries up to 6 times with 10-second intervals (60 seconds total).
+   */
+  const pollForOutputs = useCallback(async (sessionId: string, domainId: string, subscriptionId: string) => {
+    const MAX_ATTEMPTS = 6;
+    const POLL_INTERVAL = 10000; // 10 seconds
+    console.log('[Session] Starting output poll for:', sessionId);
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        console.log(`[Session] Poll attempt ${attempt + 1}/${MAX_ATTEMPTS}`);
+        const response = await fetch(`/api/sessions/${sessionId}/outputs?domainId=${domainId}&subscriptionId=${subscriptionId}`, {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Session] Poll response:', JSON.stringify(data).substring(0, 200));
+          if (data.clinicalNote || data.afterVisitSummary) {
+            dispatch({
+              type: 'SET_OUTPUTS',
+              payload: {
+                clinicalNote: data.clinicalNote || { sections: [], evidenceMap: [] },
+                afterVisitSummary: data.afterVisitSummary || '',
+              },
+            });
+            return; // Success — stop polling
+          }
+        }
+      } catch {
+        // Ignore errors during polling, will retry
+      }
+
+      // Wait before next attempt
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+      }
+    }
+  }, []);
 
   const addTranscript = useCallback((segment: TranscriptSegment) => {
     dispatch({ type: 'ADD_TRANSCRIPT', payload: segment });

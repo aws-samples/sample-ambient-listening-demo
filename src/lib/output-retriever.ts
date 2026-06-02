@@ -194,15 +194,63 @@ export function parseClinicalNote(content: string): ClinicalNote {
 }
 
 /**
+ * Parses an after-visit summary JSON file into readable text.
+ * Handles the Connect Health output format: { AfterVisitSummary: { SummarizedSegments: [...] } }
+ */
+export function parseAfterVisitSummary(content: string): string {
+  try {
+    const parsed = JSON.parse(content);
+
+    // Handle Connect Health format
+    if (parsed.AfterVisitSummary?.SummarizedSegments) {
+      return parsed.AfterVisitSummary.SummarizedSegments
+        .map((seg: { SummarizedSegment: string }) => seg.SummarizedSegment)
+        .filter((text: string) => text && text.trim())
+        .join('\n\n');
+    }
+
+    // If it's already a string or simple format
+    if (typeof parsed === 'string') return parsed;
+    if (parsed.summary) return parsed.summary;
+    if (parsed.text) return parsed.text;
+
+    // Fallback: return the raw content
+    return content;
+  } catch {
+    // Not JSON — return as-is
+    return content;
+  }
+}
+
+/**
  * Identifies the type of an S3 object based on its key.
  */
 export function identifyObjectType(
   key: string,
   prefix: string
 ): 'clinical-note' | 'transcript' | 'avs' | 'unknown' {
+  const lowerKey = key.toLowerCase();
+
+  // Check by filename regardless of path
+  if (lowerKey.endsWith('clinicaldoc.json')) {
+    return 'clinical-note';
+  }
+
+  if (lowerKey.endsWith('transcript.json')) {
+    return 'transcript';
+  }
+
+  if (lowerKey.endsWith('aftervisitsummary.json')) {
+    return 'avs';
+  }
+
+  // Fallback: check by path patterns
   const relativePath = key.slice(prefix.length);
 
   if (relativePath.startsWith(CLINICAL_NOTES_SUBFOLDER)) {
+    // It's in the clinical-notes folder but not one of the known files
+    if (relativePath.toLowerCase().includes('transcript')) return 'transcript';
+    if (relativePath.toLowerCase().includes('summary') || relativePath.toLowerCase().includes('avs')) return 'avs';
     return 'clinical-note';
   }
 
@@ -257,7 +305,13 @@ export async function retrieveOutputsOnce(
   params: OutputRetrieverParams
 ): Promise<SessionOutputs> {
   const prefix = buildOutputPrefix(params);
-  const keys = await s3Client.listObjects(params.bucket, prefix);
+  let keys = await s3Client.listObjects(params.bucket, prefix);
+
+  // If no keys found, try the alternate path (when outputS3Uri already included the prefix)
+  if (keys.length === 0) {
+    const altPrefix = `${S3_OUTPUT_PATH_PREFIX}/${S3_OUTPUT_PATH_PREFIX}/${params.domainId}/${params.subscriptionId}/${params.sessionId}/post-stream-action/`;
+    keys = await s3Client.listObjects(params.bucket, altPrefix);
+  }
 
   const outputs: SessionOutputs = {};
 
@@ -280,7 +334,8 @@ export async function retrieveOutputsOnce(
       }
       case 'avs': {
         if (!outputs.afterVisitSummary) {
-          outputs.afterVisitSummary = await s3Client.getObject(params.bucket, key);
+          const raw = await s3Client.getObject(params.bucket, key);
+          outputs.afterVisitSummary = parseAfterVisitSummary(raw);
         }
         break;
       }

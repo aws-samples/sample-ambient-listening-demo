@@ -7,6 +7,9 @@
  * @see Requirements 3.1, 3.4
  */
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { NextResponse } from 'next/server';
 import { createFHIRClient } from '@/lib/fhir-client';
 import { validateConfig } from '@/lib/config';

@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { createFHIRClient } from '@/lib/fhir-client';
 import { processPatientDataResult } from '@/lib/patient-context-formatter';
 import { validateConfig } from '@/lib/config';
+import { getEncounterNotesWithSummaries, getPatientPidFromUuid } from '@/lib/encounter-notes';
 
 export async function GET(
   _request: Request,
@@ -76,18 +77,60 @@ export async function GET(
     dateOfBirth: birthDate,
   };
 
-  // Retrieve conditions, medications, and allergies (with partial failure handling)
-  const [conditions, medications, allergies] = await Promise.all([
+  // Retrieve conditions, medications, allergies, and encounters (with partial failure handling)
+  const [conditions, medications, allergies, encounters] = await Promise.all([
     fhirClient.getConditions(patientId),
     fhirClient.getMedications(patientId),
     fhirClient.getAllergies(patientId),
+    fhirClient.getEncounters(patientId),
   ]);
+
+  // Debug: log raw allergy data to identify field mapping
+  if (allergies.success && allergies.data && allergies.data.length > 0) {
+    const firstAllergy = allergies.data[0]!;
+    console.log('[PatientContext] Raw allergy keys:', Object.keys(firstAllergy));
+    console.log('[PatientContext] Raw allergy code:', JSON.stringify(firstAllergy.code));
+    console.log('[PatientContext] Raw allergy reaction:', JSON.stringify((firstAllergy as any).reaction));
+    console.log('[PatientContext] Raw allergy text:', JSON.stringify((firstAllergy as any).text));
+    console.log('[PatientContext] Raw allergy category:', JSON.stringify((firstAllergy as any).category));
+  }
+
+  // Attach clinical note summaries to encounters via direct DB query + Bedrock summarization
+  let enrichedEncounters = encounters;
+  if (encounters.success && encounters.data && encounters.data.length > 0) {
+    try {
+      const pid = await getPatientPidFromUuid(patientId);
+      if (pid) {
+        const notesWithSummaries = await getEncounterNotesWithSummaries(pid);
+        console.log(`[PatientContext] Bedrock summarized ${notesWithSummaries.length} encounter notes for pid=${pid}`);
+
+        if (notesWithSummaries.length > 0) {
+          enrichedEncounters = {
+            ...encounters,
+            data: encounters.data.map((enc: any) => {
+              const encDate = (enc.period?.start || enc.date || '').substring(0, 10);
+              const matchingNote = notesWithSummaries.find(n => n.encounterDate === encDate);
+              if (matchingNote && matchingNote.summary) {
+                return { ...enc, _summary: matchingNote.summary };
+              }
+              return enc;
+            }),
+          };
+        }
+      } else {
+        console.log(`[PatientContext] Could not resolve UUID ${patientId} to PID`);
+      }
+    } catch (err) {
+      console.log(`[PatientContext] Encounter summary error: ${err instanceof Error ? err.message : err}`);
+    }
+  }
 
   const dataResult = {
     patient: patientResult,
     conditions,
     medications,
     allergies,
+    encounters: enrichedEncounters,
   };
 
   // Check if all resource types failed (patient succeeded but all others failed)

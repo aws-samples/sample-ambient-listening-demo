@@ -1,183 +1,232 @@
 /**
  * @jest-environment jsdom
  */
-// Feature: ambient-clinical-documentation-demo, Property 9: Clinical note and evidence map rendering completeness
-// **Validates: Requirements 7.2, 7.3**
+
+// Feature: clinical-note-writeback, Property 1: Edit Preservation Across Section Switches
+// **Validates: Requirements 1.2**
 
 import React from 'react';
-import * as fc from 'fast-check';
-import { render } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import * as fc from 'fast-check';
 import { ClinicalNotePanel } from './ClinicalNotePanel';
-import { ClinicalNote, EvidenceMapping, SOAPSection } from '../types';
+import { ClinicalNote, SOAPSection } from '../types';
+
+// ─── Arbitraries (Generators) ────────────────────────────────────────────────
+
+/** The four SOAP section headings. */
+const SOAP_HEADINGS: SOAPSection['heading'][] = ['Subjective', 'Objective', 'Assessment', 'Plan'];
 
 /**
- * Arbitrary generator for a single EvidenceMapping entry.
- * Generates both transcript and patient_context source types.
+ * Generates non-empty content strings for editing.
+ * Includes alphanumeric, spaces, newlines, and common punctuation.
+ * Avoids control characters that could interfere with textarea behavior.
  */
-const evidenceMappingArb = (index: number): fc.Arbitrary<EvidenceMapping> =>
-  fc.oneof(
-    // Transcript-sourced evidence
-    fc.record({
-      noteStatementId: fc.constant(`evidence-${index}`),
-      noteStatement: fc
-        .string({ minLength: 1, maxLength: 100 })
-        .filter((s) => s.trim().length > 0),
-      sourceType: fc.constant('transcript' as const),
-      transcriptReference: fc.record({
-        startTime: fc.float({ min: 0, max: 3600, noNaN: true }),
-        endTime: fc.float({ min: 0, max: 3600, noNaN: true }),
-        content: fc.string({ minLength: 1, maxLength: 100 }),
-      }),
-    }),
-    // Patient context-sourced evidence
-    fc.record({
-      noteStatementId: fc.constant(`evidence-${index}`),
-      noteStatement: fc
-        .string({ minLength: 1, maxLength: 100 })
-        .filter((s) => s.trim().length > 0),
-      sourceType: fc.constant('patient_context' as const),
-      transcriptReference: fc.constant(undefined),
-    })
-  );
+const editContentArb = fc.stringOf(
+  fc.char().filter((c) => {
+    const code = c.charCodeAt(0);
+    // Allow printable ASCII + newlines + tabs, exclude NUL and other control chars
+    return (code >= 32 && code <= 126) || code === 10 || code === 9;
+  }),
+  { minLength: 1, maxLength: 200 }
+);
 
 /**
- * Arbitrary generator for a ClinicalNote with all 4 SOAP sections
- * and a variable number of evidence mappings.
+ * Generates a SOAP heading to target for editing.
  */
-const clinicalNoteArb: fc.Arbitrary<ClinicalNote> = fc
-  .tuple(
-    // Content for each SOAP section (non-empty strings)
-    fc.string({ minLength: 1, maxLength: 200 }).filter((s) => s.trim().length > 0),
-    fc.string({ minLength: 1, maxLength: 200 }).filter((s) => s.trim().length > 0),
-    fc.string({ minLength: 1, maxLength: 200 }).filter((s) => s.trim().length > 0),
-    fc.string({ minLength: 1, maxLength: 200 }).filter((s) => s.trim().length > 0),
-    // Number of evidence mappings (0-5)
-    fc.integer({ min: 0, max: 5 })
-  )
-  .chain(([subjContent, objContent, assessContent, planContent, numEvidence]) => {
-    const sections: SOAPSection[] = [
-      { heading: 'Subjective', content: subjContent },
-      { heading: 'Objective', content: objContent },
-      { heading: 'Assessment', content: assessContent },
-      { heading: 'Plan', content: planContent },
-    ];
+const soapHeadingArb = fc.constantFrom(...SOAP_HEADINGS);
 
-    if (numEvidence === 0) {
-      return fc.constant({
-        sections,
-        evidenceMap: [] as EvidenceMapping[],
-      });
-    }
+/**
+ * Generates a sequence of edit operations: pairs of (section heading, new content).
+ * This simulates a provider editing multiple sections in sequence.
+ */
+const editSequenceArb = fc.array(
+  fc.tuple(soapHeadingArb, editContentArb),
+  { minLength: 2, maxLength: 8 }
+);
 
-    return fc
-      .tuple(...Array.from({ length: numEvidence }, (_, i) => evidenceMappingArb(i)))
-      .map((evidenceEntries) => ({
-        sections,
-        evidenceMap: evidenceEntries as EvidenceMapping[],
-      }));
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Creates a ClinicalNote with all four SOAP sections and default content. */
+function createTestClinicalNote(): ClinicalNote {
+  return {
+    sections: SOAP_HEADINGS.map((heading) => ({
+      heading,
+      content: `Default content for ${heading}`,
+    })),
+    evidenceMap: [],
+  };
+}
+
+// ─── Property Tests ──────────────────────────────────────────────────────────
+
+describe('Property 1: Edit Preservation Across Section Switches', () => {
+  afterEach(() => {
+    cleanup();
   });
 
-describe('Property 9: Clinical note and evidence map rendering completeness', () => {
-  it('all four SOAP section headings are rendered in the output', () => {
+  it('editing a section, switching to another, then switching back preserves the edit exactly', () => {
     fc.assert(
-      fc.property(clinicalNoteArb, (clinicalNote) => {
+      fc.property(
+        editContentArb,
+        soapHeadingArb,
+        soapHeadingArb.filter((_h) => true), // second heading (may be same or different)
+        (editContent, firstSection, secondSection) => {
+          // Skip if both sections are the same — we need to switch away and back
+          fc.pre(firstSection !== secondSection);
+
+          cleanup();
+
+          const clinicalNote = createTestClinicalNote();
+
+          const { container } = render(
+            <ClinicalNotePanel
+              clinicalNote={clinicalNote}
+              sessionEnded={true}
+              patientId="test-patient-id"
+              patientName="Test Patient"
+            />
+          );
+
+          // Find the textarea for the first section and edit it
+          const firstTextarea = container.querySelector(
+            `[data-testid="soap-section-${firstSection.toLowerCase()}"] textarea`
+          ) as HTMLTextAreaElement;
+          expect(firstTextarea).not.toBeNull();
+
+          // Simulate editing the first section
+          fireEvent.change(firstTextarea, { target: { value: editContent } });
+
+          // Verify the edit was applied
+          expect(firstTextarea.value).toBe(editContent);
+
+          // Now "switch" to the second section by editing it
+          const secondTextarea = container.querySelector(
+            `[data-testid="soap-section-${secondSection.toLowerCase()}"] textarea`
+          ) as HTMLTextAreaElement;
+          expect(secondTextarea).not.toBeNull();
+
+          fireEvent.change(secondTextarea, { target: { value: 'Some other edit' } });
+
+          // Switch back to the first section — verify the original edit is preserved
+          const firstTextareaAfter = container.querySelector(
+            `[data-testid="soap-section-${firstSection.toLowerCase()}"] textarea`
+          ) as HTMLTextAreaElement;
+
+          expect(firstTextareaAfter.value).toBe(editContent);
+
+          cleanup();
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  it('a sequence of edits across multiple sections preserves all edits', () => {
+    fc.assert(
+      fc.property(editSequenceArb, (editSequence) => {
+        cleanup();
+
+        const clinicalNote = createTestClinicalNote();
+
         const { container } = render(
-          <ClinicalNotePanel clinicalNote={clinicalNote} />
+          <ClinicalNotePanel
+            clinicalNote={clinicalNote}
+            sessionEnded={true}
+            patientId="test-patient-id"
+            patientName="Test Patient"
+          />
         );
 
-        const expectedHeadings: SOAPSection['heading'][] = [
-          'Subjective',
-          'Objective',
-          'Assessment',
-          'Plan',
-        ];
+        // Track the last edit made to each section
+        const lastEditPerSection: Record<string, string> = {};
 
-        for (const heading of expectedHeadings) {
-          // Verify the section container exists via data-testid
-          const sectionEl = container.querySelector(
-            `[data-testid="soap-section-${heading.toLowerCase()}"]`
-          );
-          expect(sectionEl).not.toBeNull();
+        // Apply all edits in sequence
+        for (const [heading, content] of editSequence) {
+          const textarea = container.querySelector(
+            `[data-testid="soap-section-${heading.toLowerCase()}"] textarea`
+          ) as HTMLTextAreaElement;
+          expect(textarea).not.toBeNull();
 
-          // Verify the heading text is present
-          expect(sectionEl!.textContent).toContain(heading);
+          fireEvent.change(textarea, { target: { value: content } });
+          lastEditPerSection[heading] = content;
         }
 
-        container.remove();
+        // Verify that each section's textarea reflects the last edit made to it
+        for (const [heading, expectedContent] of Object.entries(lastEditPerSection)) {
+          const textarea = container.querySelector(
+            `[data-testid="soap-section-${heading.toLowerCase()}"] textarea`
+          ) as HTMLTextAreaElement;
+
+          expect(textarea.value).toBe(expectedContent);
+        }
+
+        // Verify sections that were NOT edited still have their original content
+        for (const heading of SOAP_HEADINGS) {
+          if (!(heading in lastEditPerSection)) {
+            const textarea = container.querySelector(
+              `[data-testid="soap-section-${heading.toLowerCase()}"] textarea`
+            ) as HTMLTextAreaElement;
+
+            expect(textarea.value).toBe(`Default content for ${heading}`);
+          }
+        }
+
+        cleanup();
       }),
       { numRuns: 100 }
     );
   });
 
-  it('each SOAP section content is rendered in the output', () => {
+  it('editing all four sections and reading them back preserves each edit independently', () => {
     fc.assert(
-      fc.property(clinicalNoteArb, (clinicalNote) => {
-        const { container } = render(
-          <ClinicalNotePanel clinicalNote={clinicalNote} />
-        );
+      fc.property(
+        editContentArb,
+        editContentArb,
+        editContentArb,
+        editContentArb,
+        (subjectiveEdit, objectiveEdit, assessmentEdit, planEdit) => {
+          cleanup();
 
-        for (const section of clinicalNote.sections) {
-          const sectionEl = container.querySelector(
-            `[data-testid="soap-section-${section.heading.toLowerCase()}"]`
+          const clinicalNote = createTestClinicalNote();
+          const edits: Record<string, string> = {
+            Subjective: subjectiveEdit,
+            Objective: objectiveEdit,
+            Assessment: assessmentEdit,
+            Plan: planEdit,
+          };
+
+          const { container } = render(
+            <ClinicalNotePanel
+              clinicalNote={clinicalNote}
+              sessionEnded={true}
+              patientId="test-patient-id"
+              patientName="Test Patient"
+            />
           );
-          expect(sectionEl).not.toBeNull();
 
-          // Verify the section content text is rendered
-          expect(sectionEl!.textContent).toContain(section.content);
+          // Edit all four sections
+          for (const heading of SOAP_HEADINGS) {
+            const textarea = container.querySelector(
+              `[data-testid="soap-section-${heading.toLowerCase()}"] textarea`
+            ) as HTMLTextAreaElement;
+            expect(textarea).not.toBeNull();
+
+            fireEvent.change(textarea, { target: { value: edits[heading] } });
+          }
+
+          // Verify all four sections preserved their edits
+          for (const heading of SOAP_HEADINGS) {
+            const textarea = container.querySelector(
+              `[data-testid="soap-section-${heading.toLowerCase()}"] textarea`
+            ) as HTMLTextAreaElement;
+
+            expect(textarea.value).toBe(edits[heading]);
+          }
+
+          cleanup();
         }
-
-        container.remove();
-      }),
-      { numRuns: 100 }
-    );
-  });
-
-  it('every evidence mapping entry is rendered with its data-testid', () => {
-    fc.assert(
-      fc.property(clinicalNoteArb, (clinicalNote) => {
-        const { container } = render(
-          <ClinicalNotePanel clinicalNote={clinicalNote} />
-        );
-
-        for (const evidence of clinicalNote.evidenceMap) {
-          // Each evidence entry must be rendered with its unique data-testid
-          const evidenceEl = container.querySelector(
-            `[data-testid="evidence-link-${evidence.noteStatementId}"]`
-          );
-          expect(evidenceEl).not.toBeNull();
-
-          // The evidence note statement text must be present
-          expect(evidenceEl!.textContent).toContain(evidence.noteStatement);
-        }
-
-        container.remove();
-      }),
-      { numRuns: 100 }
-    );
-  });
-
-  it('evidence entries display their source type reference', () => {
-    fc.assert(
-      fc.property(clinicalNoteArb, (clinicalNote) => {
-        const { container } = render(
-          <ClinicalNotePanel clinicalNote={clinicalNote} />
-        );
-
-        for (const evidence of clinicalNote.evidenceMap) {
-          const evidenceEl = container.querySelector(
-            `[data-testid="evidence-link-${evidence.noteStatementId}"]`
-          );
-          expect(evidenceEl).not.toBeNull();
-
-          // Verify the source type label is rendered
-          const expectedLabel =
-            evidence.sourceType === 'transcript' ? 'Transcript' : 'Patient Context';
-          expect(evidenceEl!.textContent).toContain(expectedLabel);
-        }
-
-        container.remove();
-      }),
+      ),
       { numRuns: 100 }
     );
   });

@@ -1,49 +1,24 @@
 /**
  * POST /api/sessions — Create a new ambient documentation session.
  *
- * Accepts { patientId, patientContext } in the request body.
- * Validates the configured AWS region is us-east-1 or us-west-2 before creating.
- * Uses SessionManager to orchestrate domain, subscription, and session creation.
+ * Creates the session via Connect Health SDK, registers it in the stream registry,
+ * and starts the background streaming process that feeds audio to Connect Health
+ * and publishes transcript events.
  *
  * Returns { sessionId, domainId, subscriptionId, status } on success.
- * Returns 400 if the region is unsupported or required fields are missing.
- *
- * @see Requirements 4.1, 4.2, 11.2, 11.3
  */
 
 import { NextResponse } from 'next/server';
 import { validateRegion, validateConfig } from '@/lib/config';
-import { SessionManager } from '@/lib/session-manager';
-import type { ConnectHealthClient } from '@/lib/session-manager';
-
-/**
- * Stub Connect Health client for session creation.
- * In production, this would be replaced with the real AWS SDK client.
- */
-function createConnectHealthClient(): ConnectHealthClient {
-  // This is a placeholder — the real implementation uses @aws-sdk/client-connecthealth
-  return {
-    async listDomains() {
-      return [];
-    },
-    async createDomain(domainName: string) {
-      return { domainId: `domain-${Date.now()}`, domainName, status: 'ACTIVE' };
-    },
-    async createSubscription(domainId: string) {
-      return { subscriptionId: `sub-${Date.now()}`, domainId, status: 'ACTIVE' };
-    },
-    async startMedicalScribeListeningSession(_params) {
-      return { sessionId: `session-${Date.now()}`, streamUrl: '' };
-    },
-    async endSession(_sessionId: string) {
-      // no-op
-    },
-  };
-}
+import {
+  ConnectHealthClient,
+  ListDomainsCommand,
+  CreateDomainCommand,
+  CreateSubscriptionCommand,
+} from '@aws-sdk/client-connecthealth';
 
 export async function POST(request: Request) {
   try {
-    // Validate configuration (region check)
     const configResult = validateConfig();
     if (!configResult.valid) {
       return NextResponse.json(
@@ -54,56 +29,74 @@ export async function POST(request: Request) {
 
     const { config } = configResult;
 
-    // Validate region is supported before session creation
     if (!validateRegion(config.aws.region)) {
       return NextResponse.json(
-        {
-          code: 'UNSUPPORTED_REGION',
-          message: `Region "${config.aws.region}" is not supported. Supported regions: us-east-1, us-west-2`,
-          retryable: false,
-        },
+        { code: 'UNSUPPORTED_REGION', message: `Region "${config.aws.region}" is not supported.`, retryable: false },
         { status: 400 }
       );
     }
 
-    // Parse request body
     const body = await request.json() as { patientId?: string; patientContext?: string };
     const { patientId, patientContext } = body;
 
     if (!patientId || !patientContext) {
       return NextResponse.json(
-        {
-          code: 'INVALID_REQUEST',
-          message: 'Request body must include "patientId" and "patientContext"',
-          retryable: false,
-        },
+        { code: 'INVALID_REQUEST', message: 'Request body must include "patientId" and "patientContext"', retryable: false },
         { status: 400 }
       );
     }
 
-    // Create session via SessionManager
-    const client = createConnectHealthClient();
-    const sessionManager = SessionManager.fromConfig(config, client);
-    const session = await sessionManager.startSession(patientId, patientContext);
+    const region = config.aws.region;
+    const client = new ConnectHealthClient({ region });
+
+    // Step 1: Get or create domain
+    const domainName = config.connectHealth.domainName;
+    let domainId: string;
+
+    const listResponse = await client.send(new ListDomainsCommand({}));
+    const existingDomain = listResponse.domains?.find(d => d.name === domainName);
+
+    if (existingDomain) {
+      domainId = existingDomain.domainId || '';
+      console.log(`[Sessions] Using existing domain: ${domainId}`);
+    } else {
+      const createResponse = await client.send(new CreateDomainCommand({ name: domainName }));
+      domainId = createResponse.domainId || '';
+      console.log(`[Sessions] Created domain: ${domainId}`);
+    }
+
+    // Step 2: Create subscription
+    const subResponse = await client.send(new CreateSubscriptionCommand({ domainId }));
+    const subscriptionId = subResponse.subscriptionId || '';
+    console.log(`[Sessions] Created subscription: ${subscriptionId}`);
+
+    // Step 3: Generate session ID and register in stream registry
+    const sessionId = crypto.randomUUID();
+
+    // Sanitize patient context for Connect Health API
+    const sanitizedContext = patientContext.replace(/[^a-zA-Z0-9\s*_\-#\[\]()\.,;:!?'"`<>~/]/g, ' ').replace(/\s{2,}/g, ' ');
+
+    // Step 4: Session registration happens in audio-stream route on first chunk
+    // This avoids the Next.js module isolation issue where in-memory state
+    // isn't shared between different route handler modules.
 
     return NextResponse.json(
       {
-        sessionId: session.sessionId,
-        domainId: session.domainId,
-        subscriptionId: session.subscriptionId,
-        status: session.status,
+        sessionId,
+        domainId,
+        subscriptionId,
+        status: 'active',
+        patientContext: sanitizedContext,
       },
       { status: 201 }
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[Sessions] Session creation failed:', message);
     return NextResponse.json(
-      {
-        code: 'SESSION_CREATION_FAILED',
-        message,
-        retryable: false,
-      },
+      { code: 'SESSION_CREATION_FAILED', message, retryable: false },
       { status: 500 }
     );
   }
 }
+

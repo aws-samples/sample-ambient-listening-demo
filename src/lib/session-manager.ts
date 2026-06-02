@@ -238,6 +238,7 @@ export interface ChannelDefinition {
  * Parameters for starting a medical scribe listening session.
  */
 export interface StartSessionParams {
+  domainId: string;
   subscriptionId: string;
   encounterContext: {
     unstructuredContext: string;
@@ -437,6 +438,7 @@ export class SessionManager {
 
       // Step 3: Create session with patient context
       const startResponse = await this.createSession(
+        domain.domainId,
         subscription.subscriptionId,
         patientContext,
         outputS3Uri
@@ -556,11 +558,13 @@ export class SessionManager {
    * @see Requirements 4.2, 4.3, 11.1
    */
   private async createSession(
+    domainId: string,
     subscriptionId: string,
     patientContext: string,
     outputS3Uri: string
   ): Promise<StartSessionResponse> {
     return this.client.startMedicalScribeListeningSession({
+      domainId,
       subscriptionId,
       encounterContext: {
         unstructuredContext: patientContext,

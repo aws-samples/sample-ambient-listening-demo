@@ -73,6 +73,8 @@ interface OAuth2TokenResponse {
 interface FHIRClientCredentials {
   clientId: string;
   clientSecret: string;
+  username?: string;
+  password?: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -84,7 +86,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MIN_TLS_VERSION = 'TLSv1.2';
 
 /** Default Secrets Manager secret name for FHIR client credentials. */
-const DEFAULT_SECRET_NAME = 'openemr/fhir-client-credentials';
+const DEFAULT_SECRET_NAME = process.env.FHIR_CREDENTIALS_SECRET_NAME || 'openemr/fhir-client-credentials';
 
 // ─── HTTPS Agent ─────────────────────────────────────────────────────────────
 
@@ -128,6 +130,8 @@ export class FHIRClient {
   private cachedCredentials: FHIRClientCredentials | null = null;
   private cachedToken: string | null = null;
   private tokenExpiresAt: number = 0;
+  private cachedStandardToken: string | null = null;
+  private standardTokenExpiresAt: number = 0;
 
   constructor(config: FHIRClientConfig) {
     this.fhirBaseUrl = config.fhirBaseUrl.replace(/\/$/, '');
@@ -193,6 +197,136 @@ export class FHIRClient {
     return this.fetchBundleResources<FHIRAllergyIntolerance>(
       `/AllergyIntolerance?patient=${patientId}`
     );
+  }
+
+  /**
+   * Retrieves encounters for a patient from the FHIR API.
+   */
+  async getEncounters(patientId: string): Promise<FHIRFetchResult<any[]>> {
+    return this.fetchBundleResources<any>(
+      `/Encounter?patient=${patientId}&_sort=-date&_count=10`
+    );
+  }
+
+  /**
+   * Retrieves document references (clinical notes) for a patient from the FHIR API.
+   */
+  async getDocumentReferences(patientId: string): Promise<FHIRFetchResult<any[]>> {
+    return this.fetchBundleResources<any>(
+      `/DocumentReference?patient=${patientId}&_sort=-date&_count=10`
+    );
+  }
+
+  /**
+   * Retrieves clinical notes for a patient's encounters from OpenEMR's standard API.
+   * Falls back to this when FHIR DocumentReference is not available.
+   * Uses the /apis/default/api/ endpoint (non-FHIR) with a separate token that has api:oemr scope.
+   */
+  async getEncounterNotes(patientUuid: string): Promise<FHIRFetchResult<any[]>> {
+    try {
+      // Get a token with standard API scope
+      const token = await this.getStandardApiToken();
+      const apiBase = this.fhirBaseUrl.replace(/\/fhir\/?$/, '/api');
+      const url = `${apiBase}/patient/${patientUuid}/encounter`;
+
+      const response = await this.fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `Standard API request failed: ${response.status}` };
+      }
+
+      const data = await response.json();
+      // OpenEMR returns an array of encounters with embedded notes
+      const encounters = Array.isArray(data) ? data : (data.data || []);
+      return { success: true, data: encounters };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Retrieves a specific encounter's SOAP note from OpenEMR's standard API.
+   */
+  async getEncounterSoapNote(patientUuid: string, encounterUuid: string): Promise<FHIRFetchResult<any>> {
+    try {
+      const token = await this.getStandardApiToken();
+      const apiBase = this.fhirBaseUrl.replace(/\/fhir\/?$/, '/api');
+      const url = `${apiBase}/patient/${patientUuid}/encounter/${encounterUuid}/soap_note`;
+
+      const response = await this.fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `SOAP note request failed: ${response.status}` };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Gets an OAuth2 token with standard API scope (api:oemr) for non-FHIR endpoints.
+   */
+  private async getStandardApiToken(): Promise<string> {
+    if (this.cachedStandardToken && Date.now() < this.standardTokenExpiresAt - 30_000) {
+      return this.cachedStandardToken;
+    }
+
+    const credentials = await this.getCredentials();
+    const tokenUrl = `${this.fhirBaseUrl.replace(/\/apis\/default\/fhir\/?$/, '')}/oauth2/default/token`;
+
+    const body = new URLSearchParams({
+      grant_type: 'password',
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
+      username: credentials.username || credentials.clientId,
+      password: credentials.password || credentials.clientSecret,
+      user_role: 'users',
+      scope: 'openid api:oemr api:fhir',
+    });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await this.fetchFn(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Standard API token request failed: ${response.status}`);
+      }
+
+      const tokenResponse = (await response.json()) as OAuth2TokenResponse;
+      this.cachedStandardToken = tokenResponse.access_token;
+      this.standardTokenExpiresAt = Date.now() + tokenResponse.expires_in * 1000;
+      return this.cachedStandardToken;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   /**
@@ -350,19 +484,27 @@ export class FHIRClient {
     }
 
     const credentials = await this.getCredentials();
-    const tokenUrl = `${this.fhirBaseUrl.replace(/\/fhir\/?$/, '')}/oauth2/default/token`;
+    const tokenUrl = `${this.fhirBaseUrl.replace(/\/apis\/default\/fhir\/?$/, '')}/oauth2/default/token`;
+
+    console.log(`[FHIR] Requesting OAuth2 token from: ${tokenUrl}`);
+    console.log(`[FHIR] Using client_id: ${credentials.clientId.substring(0, 10)}...`);
+    console.log(`[FHIR] Using username: ${credentials.username || 'N/A'}`);
 
     const body = new URLSearchParams({
-      grant_type: 'client_credentials',
+      grant_type: 'password',
       client_id: credentials.clientId,
       client_secret: credentials.clientSecret,
-      scope: 'openid fhirUser system/Patient.read system/Condition.read system/MedicationRequest.read system/AllergyIntolerance.read system/DocumentReference.write',
+      username: credentials.username || credentials.clientId,
+      password: credentials.password || credentials.clientSecret,
+      user_role: 'users',
+      scope: 'openid api:fhir user/Patient.read user/Condition.read user/MedicationRequest.read user/AllergyIntolerance.read user/DocumentReference.read user/DocumentReference.write user/Encounter.read',
     });
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
+      console.log(`[FHIR] Sending token request...`);
       const response = await this.fetchFn(tokenUrl, {
         method: 'POST',
         headers: {
@@ -370,11 +512,13 @@ export class FHIRClient {
         },
         body: body.toString(),
         signal: controller.signal,
-        // @ts-expect-error Node.js fetch supports agent option for https
-        agent: this.tlsAgent,
       });
 
+      console.log(`[FHIR] Token response: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
+        const errorBody = await response.text();
+        console.log(`[FHIR] Token error body: ${errorBody.substring(0, 200)}`);
         throw new Error(
           `OAuth2 token request failed: ${response.status} ${response.statusText}`
         );
@@ -387,10 +531,12 @@ export class FHIRClient {
       return this.cachedToken;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
+        console.log(`[FHIR] Token request TIMED OUT after ${REQUEST_TIMEOUT_MS / 1000}s`);
         throw new Error(
           `OAuth2 token request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`
         );
       }
+      console.log(`[FHIR] Token request ERROR: ${error instanceof Error ? error.message : error}`);
       throw error;
     } finally {
       clearTimeout(timeoutId);
@@ -422,15 +568,18 @@ export class FHIRClient {
 
       const secret = JSON.parse(response.SecretString) as Record<string, string>;
 
-      if (!secret['clientId'] || !secret['clientSecret']) {
+      if (!secret['clientId'] && !secret['username']) {
         throw new Error(
-          `Secret "${this.secretName}" must contain "clientId" and "clientSecret" fields`
+          `Secret "${this.secretName}" must contain either "clientId"/"clientSecret" or "username"/"password" fields`
         );
       }
 
+      // Support both formats: {clientId, clientSecret} or {username, password}
       this.cachedCredentials = {
-        clientId: secret['clientId'],
-        clientSecret: secret['clientSecret'],
+        clientId: secret['clientId'] || secret['username'] || '',
+        clientSecret: secret['clientSecret'] || secret['password'] || '',
+        username: secret['username'] || '',
+        password: secret['password'] || '',
       };
 
       return this.cachedCredentials;

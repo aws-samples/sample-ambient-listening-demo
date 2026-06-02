@@ -26,6 +26,7 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+aws_creds.sh
 
 # vercel
 .vercel
@@ -60,3 +61,11 @@ infrastructure/openemr/cdk.out/
 
 # OS files
 Thumbs.db
+
+# Deployment temp files
+.openemr-outputs.json
+.demoapp-outputs.json
+infrastructure/synthea/output/
+
+# CDK context cache (account-specific, regenerated on each deploy)
+cdk.context.json

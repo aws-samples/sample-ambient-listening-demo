@@ -24,15 +24,16 @@ See the [Design Document](.kiro/specs/ambient-clinical-documentation-demo/design
 # Clone with submodules
 git clone --recurse-submodules https://github.com/<org>/amazon-connect-health-ambient.git
 cd amazon-connect-health-ambient
-
-# Install dependencies
 npm install
 
-# Run locally (requires environment configuration)
-npm run dev
+# Deploy to AWS (requires Route53 hosted zone)
+./deploy.sh --domain your-domain.example.com
+
+# Tear down when done
+./destroy.sh --domain your-domain.example.com
 ```
 
-For complete deployment instructions including AWS infrastructure setup, see the **[Workshop Guide](docs/WORKSHOP.md)**.
+For step-by-step manual deployment, see the **[Workshop Guide](docs/WORKSHOP.md)**.
 
 ## Git Submodules
 
@@ -45,17 +46,17 @@ For complete deployment instructions including AWS infrastructure setup, see the
 | Technology | Python CDK |
 | Purpose | Deploys OpenEMR on ECS Fargate with Aurora Serverless v2, ElastiCache, EFS, and ALB |
 
+### Synthea (`infrastructure/synthea/`)
+
+| Property | Value |
+|----------|-------|
+| Repository | [synthetichealth/synthea](https://github.com/synthetichealth/synthea) |
+| Technology | Java |
+| Purpose | Generates realistic synthetic patient data (FHIR R4 bundles) for the demo |
+
 ```bash
 # If already cloned without submodules
 git submodule update --init --recursive
-
-# Update submodule to a newer release tag
-cd infrastructure/openemr
-git fetch --tags
-git checkout <new-tag>
-cd ../..
-git add infrastructure/openemr
-git commit -m "chore: update openemr submodule to <new-tag>"
 ```
 
 ## Technology Stack
@@ -67,15 +68,56 @@ git commit -m "chore: update openemr submodule to <new-tag>"
 | AWS Services | Amazon Connect Health, ECS Fargate, ALB, S3, Secrets Manager, Aurora Serverless v2, ElastiCache, EFS, WAF, KMS |
 | Infrastructure | AWS CDK (TypeScript for demo app, Python for OpenEMR), cdk-nag (HIPAA Security) |
 | Testing | Jest, fast-check (property-based testing), MSW, Testing Library |
-| Data | OpenEMR FHIR R4 API, Synthea (synthetic patient generation) |
+| Data | OpenEMR FHIR R4 API, OpenEMR Standard API (write-back), built-in synthetic patient generator |
 
 ## Prerequisites
 
 - Node.js 20 LTS
-- Python 3.x (for OpenEMR CDK stack)
-- AWS CDK CLI (`npm install -g aws-cdk`)
-- AWS CLI configured with appropriate credentials
+- **Java 11+** (required for Synthea synthetic patient data generation)
+- Python 3.9+ (for OpenEMR CDK stack)
+- AWS CDK CLI 2.150+ (`npm install -g aws-cdk`)
+- AWS CLI 2.15+ configured with appropriate credentials
+- Docker (for CDK asset bundling)
 - AWS account with **us-east-1** or **us-west-2** region access
+- **A Route53 hosted zone** for your domain (used for HTTPS certificate creation)
+- **Amazon Connect Health environment** — You must have Amazon Connect Health enabled in your AWS account before deployment. Contact your AWS account team or request access through the AWS console. The service must be available in your target region (us-east-1 or us-west-2).
+
+## Deploy
+
+Deploy the entire demo with a single command:
+
+```bash
+./deploy.sh --domain <your-route53-domain>
+```
+
+Example:
+```bash
+./deploy.sh --domain hda.example.people.aws.dev
+```
+
+The script will:
+1. Validate prerequisites (tools, credentials, Route53 hosted zone)
+2. Create an ACM wildcard certificate for your domain (DNS-validated automatically)
+3. Deploy the OpenEMR stack (~35 min)
+4. Deploy the Demo App stack (~15 min)
+5. Configure database access between stacks
+6. Load 100 synthetic patients with clinical notes (including Margaret Smith demo patient)
+7. Register and enable the OAuth2 API client for EHR write-back
+
+Options:
+- `--region REGION` — Deploy to us-west-2 instead of us-east-1
+- `--skip-openemr` — Skip OpenEMR if already deployed
+- `--skip-data-load` — Skip synthetic data loading
+
+## Destroy
+
+Remove all resources and stop incurring costs:
+
+```bash
+./destroy.sh --domain <your-route53-domain>
+```
+
+This destroys both CDK stacks, deletes the ACM certificate, and cleans up DNS validation records.
 
 ## Security & Compliance
 

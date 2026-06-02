@@ -25,12 +25,92 @@ import type { PatientDataResult } from './fhir-client';
 const MAX_CONTEXT_BYTES = 10 * 1024; // 10KB
 
 /**
+ * Allowed character regex for Amazon Connect Health encounterContext.unstructuredContext.
+ * Pattern: [a-zA-Z0-9\s\*_\-#\[\]\(\)\.,:;!?'"`<>~/]+
+ */
+const ALLOWED_CHARS_REGEX = /[^a-zA-Z0-9\s*_\-#\[\]()\.,;:!?'"`<>~/]/g;
+
+/**
+ * Sanitizes a string to only contain characters allowed by the Connect Health API.
+ * Replaces disallowed characters (like =, @, +, &, {, }, |, ^, %) with safe alternatives.
+ * Preserves newlines for display formatting.
+ */
+function sanitizeForConnectHealth(text: string): string {
+  return text
+    .replace(ALLOWED_CHARS_REGEX, ' ')
+    .replace(/[^\S\n]{2,}/g, ' '); // Collapse multiple spaces but preserve newlines
+}
+
+/**
  * Formats a single allergy entry as plain text.
  */
 function formatAllergy(allergy: FHIRAllergyIntolerance): string {
-  const parts = [`- ${allergy.code.text}`];
+  // OpenEMR maps allergy title to various FHIR fields depending on version.
+  // Check multiple locations in priority order.
+  let name = '';
+
+  // 1. code.text (standard FHIR location)
+  if (typeof allergy.code === 'object' && allergy.code) {
+    const codeText = allergy.code.text || '';
+    const codingDisplay = allergy.code.coding?.[0]?.display || '';
+    const codingCode = allergy.code.coding?.[0]?.code || '';
+    const codingSystem = allergy.code.coding?.[0]?.system || '';
+
+    // Skip data-absent-reason system values (OpenEMR uses this when code is unmapped)
+    const isDataAbsentReason = codingSystem.includes('data-absent-reason');
+
+    if (codeText && codeText.toLowerCase() !== 'unknown') {
+      name = codeText;
+    } else if (!isDataAbsentReason && codingDisplay && codingDisplay.toLowerCase() !== 'unknown') {
+      name = codingDisplay;
+    } else if (!isDataAbsentReason && codingCode && codingCode.toLowerCase() !== 'unknown') {
+      name = codingCode;
+    }
+  } else if (typeof allergy.code === 'string') {
+    name = allergy.code || '';
+  }
+
+  // 2. reaction[0].substance (OpenEMR sometimes puts the name here)
+  if (!name && (allergy as any).reaction?.[0]?.substance) {
+    const substance = (allergy as any).reaction[0].substance;
+    name = substance.text || substance.coding?.[0]?.display || '';
+  }
+
+  // 3. note[0].text (some OpenEMR versions put title in note)
+  if (!name && (allergy as any).note?.[0]?.text) {
+    name = (allergy as any).note[0].text;
+  }
+
+  // 4. reaction[0].manifestation[0].text or display
+  if (!name && (allergy as any).reaction?.[0]?.manifestation?.[0]) {
+    const manifestation = (allergy as any).reaction[0].manifestation[0];
+    name = manifestation.text || manifestation.coding?.[0]?.display || '';
+  }
+
+  // 5. text.div (narrative text — strip HTML)
+  if (!name && (allergy as any).text?.div) {
+    const div = (allergy as any).text.div as string;
+    name = div.replace(/<[^>]*>/g, '').trim();
+    // Take first meaningful chunk (before any status info)
+    if (name.length > 50) name = name.substring(0, 50);
+  }
+
+  // 6. category as last resort (e.g., "food", "medication", "environment")
+  if (!name && (allergy as any).category) {
+    const cats = (allergy as any).category;
+    if (Array.isArray(cats) && cats.length > 0) {
+      name = `${cats[0]} allergy`;
+    }
+  }
+
+  if (!name) name = 'Unknown';
+
+  const parts = [`- ${name}`];
   if (allergy.clinicalStatus) {
-    parts.push(`(${allergy.clinicalStatus})`);
+    const status = typeof allergy.clinicalStatus === 'object'
+      ? ((allergy.clinicalStatus as any)?.coding?.[0]?.code || '')
+      : String(allergy.clinicalStatus);
+    if (status) parts.push(`(${status})`);
   }
   if (allergy.criticality) {
     parts.push(`[${allergy.criticality}]`);
@@ -42,13 +122,17 @@ function formatAllergy(allergy: FHIRAllergyIntolerance): string {
  * Formats a single medication entry as plain text.
  */
 function formatMedication(medication: FHIRMedicationRequest): string {
-  const parts = [`- ${medication.medicationCodeableConcept.text}`];
+  // Handle medicationCodeableConcept as object or nested
+  const medName = typeof medication.medicationCodeableConcept === 'object'
+    ? (medication.medicationCodeableConcept?.text || medication.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown medication')
+    : String(medication.medicationCodeableConcept || 'Unknown medication');
+  const parts = [`- ${medName}`];
   if (medication.status) {
     parts.push(`(${medication.status})`);
   }
   if (medication.dosageInstruction && medication.dosageInstruction.length > 0) {
     const firstDosage = medication.dosageInstruction[0];
-    if (firstDosage) {
+    if (firstDosage?.text) {
       parts.push(`— ${firstDosage.text}`);
     }
   }
@@ -59,9 +143,16 @@ function formatMedication(medication: FHIRMedicationRequest): string {
  * Formats a single condition entry as plain text.
  */
 function formatCondition(condition: FHIRCondition): string {
-  const parts = [`- ${condition.code.text}`];
+  // Handle code as CodeableConcept
+  const condName = typeof condition.code === 'object'
+    ? (condition.code?.text || condition.code?.coding?.[0]?.display || 'Unknown condition')
+    : String(condition.code || 'Unknown condition');
+  const parts = [`- ${condName}`];
   if (condition.clinicalStatus) {
-    parts.push(`(${condition.clinicalStatus})`);
+    const status = typeof condition.clinicalStatus === 'object'
+      ? ((condition.clinicalStatus as any)?.coding?.[0]?.code || '')
+      : String(condition.clinicalStatus);
+    if (status) parts.push(`(${status})`);
   }
   if (condition.onsetDateTime) {
     parts.push(`onset: ${condition.onsetDateTime}`);
@@ -75,8 +166,8 @@ function formatCondition(condition: FHIRCondition): string {
  */
 function formatDemographics(demographics: PatientContext['demographics']): string {
   return [
-    '=== Patient Demographics ===',
-    `Name: ${demographics.name}`,
+    '--- Patient Demographics ---',
+    `Name: ${sanitizeForConnectHealth(demographics.name)}`,
     `Age: ${demographics.age}`,
     `Sex: ${demographics.sex}`,
     `Date of Birth: ${demographics.dateOfBirth}`,
@@ -91,7 +182,7 @@ function formatCategoryItems(
   header: string,
   items: string[]
 ): { header: string; items: string[] } {
-  return { header: `\n\n=== ${header} ===`, items };
+  return { header: `\n\n--- ${header} ---`, items };
 }
 
 /**
@@ -134,6 +225,58 @@ export function formatPatientContext(context: PatientContext): string {
       context.conditions.map(formatCondition)
     ),
   ];
+
+  // Add encounters if available
+  if ((context as any).encounters && Array.isArray((context as any).encounters)) {
+    const encounters = (context as any).encounters as any[];
+    if (encounters.length > 0) {
+      const encounterItems = encounters.map((enc: any) => {
+        const date = enc.period?.start || enc.date || 'Unknown date';
+        const dateStr = date.substring(0, 10);
+        const reason = enc.reasonCode?.[0]?.text
+          || enc.reasonCode?.[0]?.coding?.[0]?.display
+          || enc.type?.[0]?.text
+          || enc.type?.[0]?.coding?.[0]?.display
+          || enc.class?.display
+          || enc.serviceType?.text
+          || 'Visit';
+        const status = enc.status || '';
+
+        // Build encounter line with reason and optional summary
+        let line = `- ${dateStr} ${reason}${status ? ` (${status})` : ''}`;
+
+        // Include encounter note/summary if available (from DocumentReference or contained)
+        if (enc._summary) {
+          line += `\n  Summary: ${enc._summary}`;
+        }
+
+        return line;
+      });
+      categories.push(
+        formatCategoryItems('Recent Encounters', encounterItems)
+      );
+
+      // Add follow-up suggestions based on conditions and encounters
+      const followUpItems: string[] = [];
+      if (context.conditions.length > 0) {
+        followUpItems.push(`- Review status of ${context.conditions[0]?.code?.text || (context.conditions[0]?.code as any)?.coding?.[0]?.display || 'primary condition'}`);
+      }
+      if (context.medications.length > 0) {
+        followUpItems.push('- Confirm medication adherence and side effects');
+      }
+      if (encounters.length >= 2) {
+        followUpItems.push('- Compare symptoms since last visit');
+      }
+      followUpItems.push('- Discuss any new symptoms or concerns');
+      followUpItems.push('- Review preventive care schedule');
+
+      if (followUpItems.length > 0) {
+        categories.push(
+          formatCategoryItems('Suggested Follow-up Questions', followUpItems)
+        );
+      }
+    }
+  }
 
   for (const category of categories) {
     // Skip empty categories
@@ -179,7 +322,8 @@ export function formatPatientContext(context: PatientContext): string {
     }
   }
 
-  return result;
+  // Sanitize the final output to only contain characters allowed by Connect Health API
+  return sanitizeForConnectHealth(result);
 }
 
 
@@ -248,11 +392,12 @@ export function processPatientDataResult(
   }
 
   // Build patient context using only successful resource types
-  const context: PatientContext = {
+  const context: PatientContext & { encounters?: any[] } = {
     demographics,
     allergies: dataResult.allergies.success ? (dataResult.allergies.data ?? []) : [],
     medications: dataResult.medications.success ? (dataResult.medications.data ?? []) : [],
     conditions: dataResult.conditions.success ? (dataResult.conditions.data ?? []) : [],
+    encounters: (dataResult as any).encounters?.success ? ((dataResult as any).encounters.data ?? []) : [],
   };
 
   const formattedContext = formatPatientContext(context);
