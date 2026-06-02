@@ -114,9 +114,16 @@ log "Destroying both stacks in parallel..."
     --context "certificateArn=arn:aws:acm:us-east-1:000000000000:certificate/dummy" \
     --context "domain=ambient.${DOMAIN}" \
     >/dev/null 2>&1
-  # If CDK destroy failed (S3 race), empty bucket and retry
+  # If CDK destroy failed (S3 race — ALB writes logs during teardown), empty and retry
   if aws cloudformation describe-stacks --stack-name DemoAppStack --region "$REGION" --query 'Stacks[0].StackStatus' --output text 2>/dev/null | grep -q "FAILED"; then
-    aws s3 rm "s3://$ACCESS_LOGS_BUCKET" --recursive --region "$REGION" --quiet 2>/dev/null || true
+    # Re-discover and empty all buckets in the stack
+    for LID in AccessLogsBucket83982689 OutputBucket7114EB27; do
+      BKT=$(aws cloudformation describe-stack-resources --stack-name DemoAppStack --region "$REGION" \
+        --query "StackResources[?LogicalResourceId==\`$LID\`].PhysicalResourceId" --output text 2>/dev/null)
+      if [[ -n "$BKT" && "$BKT" != "None" ]]; then
+        aws s3 rm "s3://$BKT" --recursive --region "$REGION" --quiet 2>/dev/null || true
+      fi
+    done
     aws cloudformation delete-stack --stack-name DemoAppStack --region "$REGION" 2>/dev/null || true
     aws cloudformation wait stack-delete-complete --stack-name DemoAppStack --region "$REGION" 2>/dev/null || true
   fi
@@ -138,8 +145,19 @@ DEMO_PID=$!
     --context "activate_openemr_apis=true" \
     --context "rds_deletion_protection=false" \
     --region "$REGION" >/dev/null 2>&1
-  # If CDK destroy failed, retry via CloudFormation API
+  # If CDK destroy failed, empty S3 buckets and retry via CloudFormation API
   if aws cloudformation describe-stacks --stack-name OpenemrEcsStack --region "$REGION" --query 'Stacks[0].StackStatus' --output text 2>/dev/null | grep -qv "does not exist"; then
+    # Empty any versioned S3 buckets blocking deletion
+    for BKT in $(aws s3 ls 2>/dev/null | awk '{print $3}' | grep "openemrecsstack"); do
+      aws s3 rm "s3://$BKT" --recursive --region "$REGION" --quiet 2>/dev/null || true
+      # Delete object versions too (versioned buckets)
+      aws s3api list-object-versions --bucket "$BKT" --region "$REGION" \
+        --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json 2>/dev/null | \
+        aws s3api delete-objects --bucket "$BKT" --delete file:///dev/stdin --region "$REGION" 2>/dev/null || true
+      aws s3api list-object-versions --bucket "$BKT" --region "$REGION" \
+        --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json 2>/dev/null | \
+        aws s3api delete-objects --bucket "$BKT" --delete file:///dev/stdin --region "$REGION" 2>/dev/null || true
+    done
     aws cloudformation delete-stack --stack-name OpenemrEcsStack --region "$REGION" 2>/dev/null || true
     aws cloudformation wait stack-delete-complete --stack-name OpenemrEcsStack --region "$REGION" 2>/dev/null || true
   fi
