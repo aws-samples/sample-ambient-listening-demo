@@ -889,20 +889,13 @@ exports.handler = async (event) => {
       resources: ['*'], // OpenEMR stack's KMS key + Demo App secrets key
     }));
 
-    // Trigger the data loader as a custom resource
-    const dataLoaderProvider = new cdk.custom_resources.Provider(this, 'DataLoaderProvider', {
-      onEventHandler: dataLoaderLambda,
-    });
+    // Data loader is invoked by deploy.sh after security group rules are configured.
+    // Do NOT use a custom resource here — the Lambda needs DB access which requires
+    // the SG rules that deploy.sh adds after CDK deploy completes.
 
-    new cdk.CustomResource(this, 'DataLoaderResource', {
-      serviceToken: dataLoaderProvider.serviceToken,
-      properties: {
-        PatientCount: '100',
-        ForceReload: 'true',
-        // Change this value to force a reload on next deploy
-        Version: '5',
-      },
-    });
+    // Data loader is invoked by deploy.sh after security group rules are configured.
+    // Do NOT use a custom resource here — the Lambda needs DB access which requires
+    // the SG rules that deploy.sh adds after CDK deploy completes.
 
     // --- Stack Outputs ---
     new cdk.CfnOutput(this, 'VpcId', {
@@ -1178,20 +1171,19 @@ exports.handler = async (event) => {
       this,
       [
         `/${id}/DataLoaderFunction/Resource`,
-        `/${id}/DataLoaderProvider/framework-onEvent/Resource`,
       ],
       [
         {
           id: 'HIPAA.Security-LambdaConcurrency',
-          reason: 'One-time data loader Lambda that runs only during stack creation. Does not handle ongoing traffic.',
+          reason: 'One-time data loader Lambda invoked by deploy.sh. Does not handle ongoing traffic.',
         },
         {
           id: 'HIPAA.Security-LambdaDLQ',
-          reason: 'One-time custom resource Lambda. Failures are reported to CloudFormation directly.',
+          reason: 'One-time data loader Lambda. Failures are handled by deploy.sh.',
         },
         {
           id: 'HIPAA.Security-LambdaInsideVPC',
-          reason: 'Lambda IS inside VPC (required for database access). This suppression handles the framework-onEvent Lambda which is auto-generated.',
+          reason: 'Lambda IS inside VPC (required for database access).',
         },
       ]
     );
@@ -1200,7 +1192,6 @@ exports.handler = async (event) => {
       this,
       [
         `/${id}/DataLoaderFunction/ServiceRole/DefaultPolicy/Resource`,
-        `/${id}/DataLoaderProvider/framework-onEvent/ServiceRole/DefaultPolicy/Resource`,
       ],
       [
         {
