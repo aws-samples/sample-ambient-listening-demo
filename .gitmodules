@@ -1,6 +1,6 @@
-[submodule "infrastructure/openemr"]
-	path = infrastructure/openemr
+[submodule "submodules/openemr"]
+	path = submodules/openemr
 	url = https://github.com/aws-samples/host-openemr-on-aws-fargate.git
-[submodule "infrastructure/synthea"]
-	path = infrastructure/synthea
+[submodule "submodules/synthea"]
+	path = submodules/synthea
 	url = https://github.com/synthetichealth/synthea

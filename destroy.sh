@@ -132,7 +132,7 @@ DEMO_PID=$!
 
 # Start OpenEMR CDK destroy in background
 (
-  cd "$SCRIPT_DIR/infrastructure/openemr"
+  cd "$SCRIPT_DIR/submodules/openemr"
   if [[ ! -d ".venv" ]]; then
     python3 -m venv .venv
   fi

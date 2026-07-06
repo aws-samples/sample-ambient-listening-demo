@@ -251,7 +251,7 @@ if [[ "$SKIP_OPENEMR" == "false" ]]; then
   log "Step 1/3: Deploying OpenEMR stack (~35 minutes)..."
   echo "───────────────────────────────────────────────────────────────"
 
-  cd "$SCRIPT_DIR/infrastructure/openemr"
+  cd "$SCRIPT_DIR/submodules/openemr"
 
   # Set up Python venv
   if [[ ! -d ".venv" ]]; then
@@ -449,13 +449,13 @@ if [[ "$SKIP_DATA_LOAD" == "false" ]]; then
 
   [[ -z "$OUTPUT_BUCKET" || "$OUTPUT_BUCKET" == "None" ]] && fail "Output bucket not found in DemoAppStack outputs"
 
-  SYNTHEA_DIR="$SCRIPT_DIR/infrastructure/synthea"
+  SYNTHEA_DIR="$SCRIPT_DIR/submodules/synthea"
   SYNTHEA_OUTPUT="$SYNTHEA_DIR/output/fhir"
 
   # Verify Synthea submodule is present
   if [[ ! -f "$SYNTHEA_DIR/run_synthea" ]]; then
     log "Initializing Synthea submodule..."
-    git -C "$SCRIPT_DIR" submodule update --init infrastructure/synthea || fail "Failed to initialize Synthea submodule"
+    git -C "$SCRIPT_DIR" submodule update --init submodules/synthea || fail "Failed to initialize Synthea submodule"
   fi
 
   # Generate 100 patients in Massachusetts (seed 12345 for reproducibility)

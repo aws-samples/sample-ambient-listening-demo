@@ -37,7 +37,7 @@ For step-by-step manual deployment, see the **[Workshop Guide](docs/WORKSHOP.md)
 
 ## Git Submodules
 
-### OpenEMR on ECS (`infrastructure/openemr/`)
+### OpenEMR on ECS (`submodules/openemr/`)
 
 | Property | Value |
 |----------|-------|
@@ -46,7 +46,7 @@ For step-by-step manual deployment, see the **[Workshop Guide](docs/WORKSHOP.md)
 | Technology | Python CDK |
 | Purpose | Deploys OpenEMR on ECS Fargate with Aurora Serverless v2, ElastiCache, EFS, and ALB |
 
-### Synthea (`infrastructure/synthea/`)
+### Synthea (`submodules/synthea/`)
 
 | Property | Value |
 |----------|-------|

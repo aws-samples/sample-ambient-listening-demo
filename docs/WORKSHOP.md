@@ -358,7 +358,7 @@ git submodule update --init --recursive
 ### 2.2 Install OpenEMR Stack Dependencies
 
 ```bash
-cd infrastructure/openemr
+cd submodules/openemr
 python3 -m venv .venv
 source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -366,7 +366,7 @@ pip install -r requirements.txt
 
 ### 2.3 Configure OpenEMR Stack Context
 
-Edit `infrastructure/openemr/cdk.json` or pass context parameters at deploy time:
+Edit `submodules/openemr/cdk.json` or pass context parameters at deploy time:
 
 | Parameter | Description | Recommended Value |
 |-----------|-------------|-------------------|
@@ -383,7 +383,7 @@ export MY_IP=$(curl -s https://checkip.amazonaws.com)
 ### 2.4 Deploy the OpenEMR Stack
 
 ```bash
-cd infrastructure/openemr
+cd submodules/openemr
 
 cdk deploy \
   --context security_group_ip_range_ipv4="${MY_IP}/32" \
@@ -762,7 +762,7 @@ cdk destroy --force --region us-east-1
 ### 7.2 Destroy the OpenEMR Stack
 
 ```bash
-cd infrastructure/openemr
+cd submodules/openemr
 source .venv/bin/activate
 
 cdk destroy --force --region us-east-1
@@ -824,7 +824,7 @@ The OpenEMR CDK stack is referenced as a Git submodule pinned to a specific rele
 ### 8.1 Check Current Version
 
 ```bash
-cd infrastructure/openemr
+cd submodules/openemr
 cat VERSION
 git log --oneline -1
 ```
@@ -840,7 +840,7 @@ git tag --sort=-v:refname | head -20
 
 ```bash
 # From the project root
-cd infrastructure/openemr
+cd submodules/openemr
 
 # Checkout the new release tag
 git fetch --tags origin
@@ -848,7 +848,7 @@ git checkout v5.0.0   # Replace with desired version tag
 
 # Return to project root and update the submodule reference
 cd ../..
-git add infrastructure/openemr
+git add submodules/openemr
 git commit -m "chore: update OpenEMR submodule to v5.0.0"
 ```
 
@@ -866,7 +866,7 @@ If the script fails, the new version may have changed its output keys. Check the
 ### 8.5 Test Deployment
 
 ```bash
-cd infrastructure/openemr
+cd submodules/openemr
 source .venv/bin/activate
 pip install -r requirements.txt   # In case dependencies changed
 cdk synth                          # Verify synthesis succeeds
@@ -1294,7 +1294,7 @@ amazon-connect-health-ambient/
 
 ```bash
 # Deploy everything (from project root)
-cd infrastructure/openemr && cdk deploy && cd ../demo-app && cdk deploy
+cd submodules/openemr && cdk deploy && cd ../demo-app && cdk deploy
 
 # Check application health
 curl -sk $(aws cloudformation describe-stacks --stack-name DemoAppStack \

@@ -66,6 +66,7 @@ Thumbs.db
 .openemr-outputs.json
 .demoapp-outputs.json
 infrastructure/synthea/output/
+submodules/synthea/output/
 
 # CDK context cache (account-specific, regenerated on each deploy)
 cdk.context.json

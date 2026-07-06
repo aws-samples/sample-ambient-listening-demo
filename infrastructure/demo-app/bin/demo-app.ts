@@ -39,6 +39,6 @@ new DemoAppStack(app, 'DemoAppStack', {
 // Suppressions with documented justifications are applied in the stack definition.
 Aspects.of(app).add(new HIPAASecurityChecks({ verbose: true }));
 
-// NOTE: The OpenEMR submodule (infrastructure/openemr/) already includes its own cdk-nag
+// NOTE: The OpenEMR submodule (submodules/openemr/) already includes its own cdk-nag
 // checks with both AwsSolutionsChecks and HIPAASecurityChecks enabled in app.py.
-// See infrastructure/openemr/app.py for details.
+// See submodules/openemr/app.py for details.
