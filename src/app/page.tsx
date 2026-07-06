@@ -461,11 +461,7 @@ function AmbientDocumentationContent() {
               <AfterVisitSummaryPanel
                 content={state.afterVisitSummary}
                 isLoading={session?.status === 'ending'}
-                error={
-                  session?.status === 'ended' && !state.afterVisitSummary && !state.isLoading
-                    ? undefined
-                    : undefined
-                }
+                error={undefined}
               />
             </div>
           </div>

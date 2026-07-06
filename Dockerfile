@@ -42,5 +42,8 @@ USER nextjs
 
 EXPOSE 3000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
+
 # Use start-server.js which patches the Next.js server to add WebSocket on /ws
 CMD ["node", "start-server.js"]
