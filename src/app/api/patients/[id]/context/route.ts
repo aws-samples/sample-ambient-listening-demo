@@ -19,9 +19,9 @@ import { getEncounterNotesWithSummaries, getPatientPidFromUuid } from '@/lib/enc
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const patientId = params.id;
+  const { id: patientId } = await params;
 
   const configResult = validateConfig();
   if (!configResult.valid) {
