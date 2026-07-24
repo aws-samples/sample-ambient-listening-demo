@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "20.19.41",
-    "aws-cdk": "2.260.0",
+    "aws-cdk": "2.1133.0",
     "ts-node": "10.9.2",
     "typescript": "5.9.3",
     "jest": "29.7.0",
