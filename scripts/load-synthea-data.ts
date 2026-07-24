@@ -4,6 +4,12 @@
  *
  * Loads Synthea-generated FHIR R4 Bundle JSON files into OpenEMR via the FHIR API.
  *
+ * HIPAA NOTICE: This script processes FHIR R4 resources containing Protected Health
+ * Information (PHI) including Patient, Condition, MedicationRequest, AllergyIntolerance,
+ * Encounter, and Observation resources. Ensure HIPAA controls are in place including
+ * encryption at rest and in transit, access logging, and BAA agreements with AWS.
+ * This demo uses synthetic (Synthea-generated) data only.
+ *
  * Usage:
  *   npx ts-node --project tsconfig.scripts.json scripts/load-synthea-data.ts <directory>
  *

@@ -85,15 +85,7 @@ export async function GET(
     fhirClient.getEncounters(patientId),
   ]);
 
-  // Debug: log raw allergy data to identify field mapping
-  if (allergies.success && allergies.data && allergies.data.length > 0) {
-    const firstAllergy = allergies.data[0]!;
-    console.log('[PatientContext] Raw allergy keys:', Object.keys(firstAllergy));
-    console.log('[PatientContext] Raw allergy code:', JSON.stringify(firstAllergy.code));
-    console.log('[PatientContext] Raw allergy reaction:', JSON.stringify((firstAllergy as any).reaction));
-    console.log('[PatientContext] Raw allergy text:', JSON.stringify((firstAllergy as any).text));
-    console.log('[PatientContext] Raw allergy category:', JSON.stringify((firstAllergy as any).category));
-  }
+  // Debug allergy field mapping verification removed — contained PHI
 
   // Attach clinical note summaries to encounters via direct DB query + Bedrock summarization
   let enrichedEncounters = encounters;

@@ -75,7 +75,7 @@ git submodule update --init --recursive
 - Node.js 20 LTS
 - **Java 11+** (required for Synthea synthetic patient data generation)
 - Python 3.9+ (for OpenEMR CDK stack)
-- AWS CDK CLI 2.150+ (`npm install -g aws-cdk`)
+- AWS CDK CLI 2.150+ (`npm install -g aws-cdk@2.150.0`)
 - AWS CLI 2.15+ configured with appropriate credentials
 - Docker (for CDK asset bundling)
 - AWS account with **us-east-1** or **us-west-2** region access
@@ -132,6 +132,18 @@ This demo follows HIPAA security best practices:
 - **S3 hardening**: Block all public access, SSL-only bucket policy, SSE-KMS
 
 > **Important**: This demo uses **synthetic patient data only** (Synthea-generated). A Business Associate Agreement (BAA) with AWS is required for production use with real PHI.
+
+## Responsible AI
+
+This application uses AI services (Amazon Connect Health Medical Scribe and Amazon Bedrock) to generate clinical documentation. The following principles apply:
+
+- **Human-in-the-loop**: All AI-generated clinical notes require clinician review and approval before being written to the patient record. The UI provides an editable interface and confirmation dialog to enforce this workflow.
+- **Assistive, not deterministic**: AI-generated SOAP notes, transcriptions, and summaries are assistive tools. The clinician maintains full clinical responsibility for all documentation and patient care decisions.
+- **No autonomous medical decisions**: AI outputs from this system should not be used as the sole basis for medical diagnoses, treatment plans, or clinical decisions.
+- **Content filtering**: For production deployments, enable [Amazon Bedrock Guardrails](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html) for content filtering on all model invocations.
+- **Bias and fairness**: Clinical AI systems may reflect biases present in training data. Regularly evaluate outputs for fairness across patient demographics and clinical contexts.
+- **Transparency**: Patients and clinicians should be informed when AI-assisted documentation is in use. AI-generated content is clearly labeled in the UI.
+- **Data privacy**: Patient context sent to AI services is limited to what is clinically necessary. All data handling follows HIPAA requirements with encryption in transit and at rest.
 
 ## Workshop Guide
 

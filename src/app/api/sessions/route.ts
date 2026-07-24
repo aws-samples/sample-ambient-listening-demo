@@ -5,6 +5,11 @@
  * and starts the background streaming process that feeds audio to Connect Health
  * and publishes transcript events.
  *
+ * HIPAA NOTICE: This endpoint receives patient context (PHI) to configure the
+ * ambient documentation session. All data is encrypted in transit (TLS) and
+ * handled in accordance with HIPAA requirements. Ensure BAA agreements are in
+ * place with AWS for production deployments with real PHI.
+ *
  * Returns { sessionId, domainId, subscriptionId, status } on success.
  */
 

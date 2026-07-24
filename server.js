@@ -1,6 +1,13 @@
 /**
  * Custom server that runs Next.js + WebSocket on the same port (3000).
  * Handles WebSocket upgrades on the /ws path.
+ *
+ * RESPONSIBLE AI NOTICE:
+ * This server streams audio to Amazon Connect Health Medical Scribe and relays
+ * transcript events back to the client. AI-generated transcripts and clinical notes
+ * are assistive outputs that require clinician review before use in patient care.
+ * The clinician must review, edit, and approve all AI-generated content before
+ * it is written back to the patient's medical record.
  */
 
 const { createServer } = require('http');

@@ -39,6 +39,8 @@ You need an AWS account with the following:
 
 The deploying principal (IAM user or role) requires the following IAM policy actions:
 
+> ⚠️ **Production Note**: The following policy uses ARN patterns scoped to resources created by this workshop's CDK stacks. For production deployments, further restrict Resource ARNs to your specific stack names and use tag-based conditions where supported.
+
 ```json
 {
   "Version": "2012-10-17",
@@ -47,7 +49,18 @@ The deploying principal (IAM user or role) requires the following IAM policy act
       "Sid": "CDKBootstrapAndDeploy",
       "Effect": "Allow",
       "Action": [
-        "cloudformation:*",
+        "cloudformation:*"
+      ],
+      "Resource": [
+        "arn:aws:cloudformation:*:*:stack/CDKToolkit/*",
+        "arn:aws:cloudformation:*:*:stack/OpenEMRStack/*",
+        "arn:aws:cloudformation:*:*:stack/DemoAppStack/*"
+      ]
+    },
+    {
+      "Sid": "IAMRoleManagement",
+      "Effect": "Allow",
+      "Action": [
         "iam:CreateRole",
         "iam:DeleteRole",
         "iam:AttachRolePolicy",
@@ -64,7 +77,13 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "iam:AddRoleToInstanceProfile",
         "iam:RemoveRoleFromInstanceProfile"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:iam::*:role/cdk-*",
+        "arn:aws:iam::*:role/OpenEMRStack-*",
+        "arn:aws:iam::*:role/DemoAppStack-*",
+        "arn:aws:iam::*:instance-profile/OpenEMRStack-*",
+        "arn:aws:iam::*:instance-profile/DemoAppStack-*"
+      ]
     },
     {
       "Sid": "NetworkingResources",
@@ -98,7 +117,12 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "ec2:CreateTags",
         "ec2:DeleteTags"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": ["us-east-1", "us-west-2"]
+        }
+      }
     },
     {
       "Sid": "ECSResources",
@@ -122,7 +146,14 @@ The deploying principal (IAM user or role) requires the following IAM policy act
       "Action": [
         "elasticloadbalancing:*"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:elasticloadbalancing:*:*:targetgroup/OpenEMR*/*",
+        "arn:aws:elasticloadbalancing:*:*:targetgroup/DemoAp*/*",
+        "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/OpenEMR*/*",
+        "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/DemoAp*/*",
+        "arn:aws:elasticloadbalancing:*:*:listener/app/*/*",
+        "arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*"
+      ]
     },
     {
       "Sid": "S3Resources",
@@ -142,7 +173,14 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "s3:GetObject",
         "s3:DeleteObject"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:s3:::cdk-*",
+        "arn:aws:s3:::cdk-*/*",
+        "arn:aws:s3:::demoappstack-*",
+        "arn:aws:s3:::demoappstack-*/*",
+        "arn:aws:s3:::openemrstack-*",
+        "arn:aws:s3:::openemrstack-*/*"
+      ]
     },
     {
       "Sid": "KMSResources",
@@ -159,7 +197,12 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "kms:PutKeyPolicy",
         "kms:CreateGrant"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": ["us-east-1", "us-west-2"]
+        }
+      }
     },
     {
       "Sid": "SecretsManagerResources",
@@ -174,7 +217,13 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "secretsmanager:Describe*",
         "secretsmanager:List*"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:secretsmanager:*:*:secret:DemoAppStack*",
+        "arn:aws:secretsmanager:*:*:secret:OpenEMRStack*",
+        "arn:aws:secretsmanager:*:*:secret:dbsecret*",
+        "arn:aws:secretsmanager:*:*:secret:Password*",
+        "arn:aws:secretsmanager:*:*:secret:RdsSlotSecret*"
+      ]
     },
     {
       "Sid": "RDSResources",
@@ -190,7 +239,11 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "rds:ModifyDBCluster",
         "rds:AddTagsToResource"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:rds:*:*:cluster:openemr*",
+        "arn:aws:rds:*:*:db:openemr*",
+        "arn:aws:rds:*:*:subgrp:openemr*"
+      ]
     },
     {
       "Sid": "ElastiCacheResources",
@@ -203,7 +256,10 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "elasticache:Describe*",
         "elasticache:AddTagsToResource"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:elasticache:*:*:cluster:openemr*",
+        "arn:aws:elasticache:*:*:subnetgroup:openemr*"
+      ]
     },
     {
       "Sid": "EFSResources",
@@ -216,7 +272,14 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "elasticfilesystem:Describe*",
         "elasticfilesystem:TagResource"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:elasticfilesystem:*:*:file-system/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": ["us-east-1", "us-west-2"]
+        }
+      }
     },
     {
       "Sid": "WAFResources",
@@ -231,7 +294,10 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "wafv2:PutLoggingConfiguration",
         "wafv2:DeleteLoggingConfiguration"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:wafv2:*:*:regional/webacl/DemoAppStack*/*",
+        "arn:aws:wafv2:*:*:regional/webacl/OpenEMRStack*/*"
+      ]
     },
     {
       "Sid": "CloudWatchLogs",
@@ -255,7 +321,11 @@ The deploying principal (IAM user or role) requires the following IAM policy act
         "ssm:PutParameter",
         "ssm:DeleteParameter"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:ssm:*:*:parameter/OpenEMRStack/*",
+        "arn:aws:ssm:*:*:parameter/DemoAppStack/*",
+        "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
+      ]
     },
     {
       "Sid": "ACMCertificates",
@@ -293,13 +363,13 @@ Install the following tools with the specified minimum versions:
 | AWS CLI | 2.15.0 | [Install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
 | Node.js | 20.0.0 (LTS) | [Download](https://nodejs.org/) |
 | npm | 10.0.0 | Included with Node.js |
-| AWS CDK CLI | 2.150.0 | `npm install -g aws-cdk@latest` |
+| AWS CDK CLI | 2.150.0 | `npm install -g aws-cdk@2.150.0` |
 | Python | 3.9+ | [Download](https://www.python.org/downloads/) |
 | pip | 23.0+ | Included with Python |
 | Git | 2.39+ | [Download](https://git-scm.com/) |
 | Docker | 24.0+ | [Download](https://www.docker.com/) (for local testing) |
-| TypeScript | 5.5+ | `npm install -g typescript` |
-| ts-node | 10.9+ | `npm install -g ts-node` |
+| TypeScript | 5.5+ | `npm install -g typescript@5.5.4` |
+| ts-node | 10.9+ | `npm install -g ts-node@10.9.2` |
 
 ### 1.4 Verification
 

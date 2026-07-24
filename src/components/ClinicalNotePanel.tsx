@@ -1,5 +1,14 @@
 'use client';
 
+/**
+ * ClinicalNotePanel — Displays and allows editing of AI-generated clinical notes.
+ *
+ * HIPAA NOTICE: This component displays Protected Health Information (PHI) including
+ * clinical notes, SOAP sections, and evidence mappings. Ensure the application
+ * implements HIPAA-required controls including encryption, access controls, and
+ * audit logging for production deployments.
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import { ClinicalNote, EvidenceMapping, SOAPSection } from '../types';
 import { ConfirmationDialog } from './ConfirmationDialog';

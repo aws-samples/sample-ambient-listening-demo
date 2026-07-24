@@ -8,6 +8,12 @@
  *
  * The DB insert replicates exactly what the OpenEMR UI does when a user creates
  * a Clinical Notes Form entry through the web interface.
+ *
+ * HIPAA NOTICE: This module handles Protected Health Information (PHI) including
+ * patient identifiers, clinical notes, and encounter data. Deployments must implement
+ * appropriate HIPAA safeguards including encryption at rest and in transit, access
+ * controls, audit logging, and BAA agreements with AWS. See the AWS HIPAA compliance
+ * documentation and shared responsibility model for additional requirements.
  */
 
 import {
@@ -149,7 +155,7 @@ export async function createEncounterWithNote(
   const apiBase = FHIR_BASE_URL.replace(/\/fhir\/?$/, '/api');
 
   // Step 1: Create encounter via API
-  console.log(`[Writeback] Creating encounter for patient ${patientUuid}`);
+  console.log(`[Writeback] Creating encounter`);
   const encResp = await fetch(`${apiBase}/patient/${patientUuid}/encounter`, {
     method: 'POST',
     headers: {
@@ -182,7 +188,7 @@ export async function createEncounterWithNote(
   if (!encounterId) {
     throw new Error('Encounter created but no ID returned');
   }
-  console.log(`[Writeback] Encounter created: eid=${encounterId}`);
+  console.log(`[Writeback] Encounter created`);
 
   // Step 2: Insert clinical note via direct DB (matching UI pattern exactly)
   const noteContent = formatSOAPContent(sections);
@@ -195,7 +201,7 @@ export async function createEncounterWithNote(
     password: dbCreds.password,
     database: 'openemr',
     connectTimeout: 10000,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: true },
   });
 
   try {
@@ -217,13 +223,13 @@ export async function createEncounterWithNote(
     const nextFormId = maxFormId[0]!.next_id;
 
     // Insert into form_clinical_notes (matching exact UI pattern)
-    const [cnResult] = await conn.execute<mysql.ResultSetHeader>(
+    await conn.execute<mysql.ResultSetHeader>(
       `INSERT INTO form_clinical_notes 
        (form_id, date, pid, encounter, user, groupname, authorized, activity, code, codetext, description, clinical_notes_type, note_related_to)
        VALUES (?, CURDATE(), ?, ?, 'admin', 'Default', 1, 1, 'LOINC:34109-9', 'General Note', ?, 'progress_note', '[]')`,
       [nextFormId, pid, String(encounterNum), noteContent]
     );
-    console.log(`[Writeback] Clinical note inserted: id=${cnResult.insertId}, form_id=${nextFormId}`);
+    console.log(`[Writeback] Clinical note inserted`);
 
     // Insert into forms table (links the note to the encounter)
     await conn.execute(
@@ -232,13 +238,13 @@ export async function createEncounterWithNote(
        VALUES (NOW(), ?, 'Clinical Notes Form', ?, ?, 'admin', 'Default', 1, 0, 'clinical_notes')`,
       [encounterNum, nextFormId, pid]
     );
-    console.log(`[Writeback] Forms entry created, linking form_id=${nextFormId} to encounter ${encounterNum}`);
+    console.log(`[Writeback] Forms entry created`);
 
   } finally {
     await conn.end().catch(() => {});
   }
 
-  console.log(`[Writeback] Success: encounter ${encounterId} with clinical note for patient ${patientUuid}`);
+  console.log(`[Writeback] Success: encounter written to EHR`);
 
   return {
     encounterId,

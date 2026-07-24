@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * TranscriptView — Displays real-time patient-clinician conversation transcript.
+ *
+ * HIPAA NOTICE: This component displays Protected Health Information (PHI) from
+ * clinical conversations. Ensure HIPAA controls are in place including encryption,
+ * access controls, and audit logging for production deployments.
+ */
+
 import { useEffect, useRef } from 'react';
 import { TranscriptSegment } from '../types';
 

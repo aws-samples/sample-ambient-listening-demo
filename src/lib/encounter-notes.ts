@@ -4,7 +4,11 @@
  * OpenEMR stores clinical notes in `form_clinical_notes` table linked by encounter number.
  * The FHIR API doesn't expose these as DocumentReferences, so we query the DB directly.
  * 
- * After fetching raw notes, uses Amazon Bedrock (Claude) to generate concise clinical summaries.
+ * After fetching raw notes, uses Amazon Bedrock (Nova Lite) to generate concise clinical summaries.
+ *
+ * RESPONSIBLE AI: AI-generated summaries from Bedrock are for clinician convenience only.
+ * They must not be used as the sole basis for clinical decisions. Clinicians should
+ * refer to the full clinical note for complete and accurate information.
  * 
  * The ECS task has access to the OpenEMR Aurora database via the DB secret.
  */
@@ -73,7 +77,7 @@ export async function getEncounterNotesFromDb(patientPid: number): Promise<Encou
     password: creds.password,
     database: 'openemr',
     connectTimeout: 5000,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: true },
   });
 
   try {
@@ -115,7 +119,7 @@ export async function getPatientPidFromUuid(patientUuid: string): Promise<number
     password: creds.password,
     database: 'openemr',
     connectTimeout: 5000,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: true },
   });
 
   try {

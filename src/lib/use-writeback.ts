@@ -32,6 +32,10 @@ export interface WriteBackParams {
  * useWriteBack — Custom hook that manages the write-back of a clinical note
  * to OpenEMR via the /api/sessions/[id]/writeback endpoint.
  *
+ * IMPORTANT: This hook should only be invoked after the clinician has reviewed
+ * and approved the AI-generated clinical note. AI outputs are assistive and
+ * must not be written to the EHR without human validation.
+ *
  * Handles:
  * - Calling the writeback API endpoint
  * - Tracking saving/success/error status

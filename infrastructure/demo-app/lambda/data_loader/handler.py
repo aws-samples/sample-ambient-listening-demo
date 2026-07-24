@@ -70,7 +70,7 @@ def get_db_credentials():
             if 'openemr' in cluster.get('DBClusterIdentifier', '').lower():
                 actual_host = cluster['Endpoint']
                 if actual_host != creds.get('host'):
-                    print(f"  Overriding DB host: {creds.get('host')} -> {actual_host}")
+                    print(f"  Overriding DB host with discovered RDS endpoint")
                     creds['host'] = actual_host
                 break
     except Exception as e:
@@ -80,11 +80,10 @@ def get_db_credentials():
 
 
 def get_db_connection(credentials):
-    """Create database connection."""
+    """Create database connection with TLS certificate validation."""
     import ssl as ssl_module
     ssl_context = ssl_module.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl_module.CERT_NONE
+    # Uses default CA store which includes Amazon Root CA for RDS/Aurora
     return pymysql.connect(
         host=str(credentials['host']),
         port=int(credentials.get('port', 3306)),

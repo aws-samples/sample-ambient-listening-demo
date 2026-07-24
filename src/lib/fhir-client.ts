@@ -517,8 +517,8 @@ export class FHIRClient {
       console.log(`[FHIR] Token response: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        console.log(`[FHIR] Token error body: ${errorBody.substring(0, 200)}`);
+        await response.text(); // consume the response body
+        console.log(`[FHIR] Token error: ${response.status} ${response.statusText}`);
         throw new Error(
           `OAuth2 token request failed: ${response.status} ${response.statusText}`
         );

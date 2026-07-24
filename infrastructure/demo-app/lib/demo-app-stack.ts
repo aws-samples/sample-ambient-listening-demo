@@ -436,17 +436,34 @@ export class DemoAppStack extends cdk.Stack {
       resources: [this.outputBucket.bucketArn],
     }));
 
-    // KMS decrypt/encrypt permission scoped to the output bucket key and secrets key
+    // KMS decrypt/encrypt permission for output bucket key, secrets key, and OpenEMR stack's KMS key.
+    // The OpenEMR stack's KMS key ARN is not available via SSM, so we use a scoped wildcard
+    // with a ViaService condition to restrict usage to Secrets Manager and S3 only.
     this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
-      sid: 'KmsDecryptForS3Objects',
+      sid: 'KmsDecryptForKnownKeys',
       effect: iam.Effect.ALLOW,
       actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:Encrypt'],
       resources: [
         this.outputBucketKey.keyArn,
         secretsKey.keyArn,
-        // OpenEMR stack's KMS key (encrypts the admin password and DB secrets — key ID changes per deploy)
+      ],
+    }));
+
+    this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'KmsDecryptForOpenEmrSecrets',
+      effect: iam.Effect.ALLOW,
+      actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+      resources: [
         `arn:aws:kms:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:key/*`,
       ],
+      conditions: {
+        StringEquals: {
+          'kms:ViaService': [
+            `secretsmanager.${cdk.Aws.REGION}.amazonaws.com`,
+            `s3.${cdk.Aws.REGION}.amazonaws.com`,
+          ],
+        },
+      },
     }));
 
     // Secrets Manager read access scoped to the specific secret ARNs
@@ -458,10 +475,9 @@ export class DemoAppStack extends cdk.Stack {
         this.dbCredentials.secretArn,
         this.fhirApiCredentials.secretArn,
         this.openemrAdminCredentials.secretArn,
-        // OpenEMR stack password secret (for FHIR API password grant auth)
-        `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:Password67973E0B-*`,
-        // OpenEMR Aurora database secret (for direct DB queries — clinical notes)
-        `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:dbsecretF8F18970-*`,
+        // OpenEMR stack secrets — full ARNs from SSM parameters published by deploy.sh
+        credentialsSecretArn,
+        ssm.StringParameter.valueForStringParameter(this, `/${openemrStackName}/DatabaseSecretArn`),
       ],
     }));
 
@@ -510,7 +526,6 @@ export class DemoAppStack extends cdk.Stack {
         CONNECT_HEALTH_DOMAIN_NAME: connectHealthDomainName,
         FHIR_CREDENTIALS_SECRET_NAME: this.fhirApiCredentials.secretName,
         DB_SECRET_ARN: ssm.StringParameter.valueForStringParameter(this, `/${openemrStackName}/DatabaseSecretArn`),
-        NODE_TLS_REJECT_UNAUTHORIZED: '0', // TODO: Remove after fixing TLS cert issue
       },
       secrets: {
         DB_CREDENTIALS: ecs.Secret.fromSecretsManager(this.dbCredentials),
@@ -851,13 +866,15 @@ exports.handler = async (event) => {
       securityGroups: [this.ecsSecurityGroup],
     });
 
-    // Grant Lambda access to read the OpenEMR database secret
+    // Grant Lambda access to read the OpenEMR database secret.
+    // The Lambda discovers the DB secret at runtime via ListSecrets (the ARN suffix changes per deploy),
+    // so prefix patterns are needed here. The Password secret ARN is available from SSM.
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['secretsmanager:GetSecretValue'],
       resources: [
+        credentialsSecretArn,
         `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:dbsecret*`,
         `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:RdsSlotSecret*`,
-        `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:Password67973E0B-*`,
       ],
     }));
 
@@ -883,10 +900,22 @@ exports.handler = async (event) => {
       resources: [this.fhirApiCredentials.secretArn, this.openemrAdminCredentials.secretArn],
     }));
 
-    // Grant KMS decrypt/encrypt for the OpenEMR secrets and FHIR credentials secret
+    // Grant KMS decrypt/encrypt for the Demo App secrets key and output bucket key
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey', 'kms:GenerateDataKey*'],
-      resources: ['*'], // OpenEMR stack's KMS key + Demo App secrets key
+      resources: [this.outputBucketKey.keyArn, secretsKey.keyArn],
+    }));
+
+    // Grant KMS decrypt for OpenEMR stack's KMS key (exact ARN not available via SSM),
+    // scoped to Secrets Manager usage only via kms:ViaService condition
+    dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+      resources: [`arn:aws:kms:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:key/*`],
+      conditions: {
+        StringEquals: {
+          'kms:ViaService': `secretsmanager.${cdk.Aws.REGION}.amazonaws.com`,
+        },
+      },
     }));
 
     // Data loader is invoked by deploy.sh after security group rules are configured.

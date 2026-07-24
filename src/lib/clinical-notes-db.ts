@@ -79,7 +79,7 @@ export async function getEncounterNotes(patientUuid: string, region: string): Pr
       password: creds.password,
       database: creds.dbname,
       connectTimeout: 5000,
-      ssl: { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: true },
     });
 
     // First, get the patient's internal pid from their UUID

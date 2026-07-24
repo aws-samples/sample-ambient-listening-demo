@@ -9,6 +9,12 @@
  * and others fail, the formatter includes all successful data and produces a
  * warning listing exactly the failed resource types.
  *
+ * RESPONSIBLE AI: This module formats patient data for AI context. The formatted output
+ * is sent to Amazon Connect Health to provide clinical context for ambient documentation.
+ * Only clinically relevant data is included. Patient privacy is protected through
+ * encryption in transit (TLS) and at rest (KMS). AI-generated outputs derived from
+ * this context require clinician review before use in patient care decisions.
+ *
  * @see Requirements 3.2, 3.5
  */
 

@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
   try {
     // Use the patient UUID directly with the FHIR API (no PID resolution needed)
-    console.log(`[Encounters] Creating encounter via FHIR for patient: ${body.patientId}`);
+    console.log(`[Encounters] Creating encounter via FHIR`);
 
     // Create encounter with clinical note via FHIR API
     const result = await createEncounterWithNote(body.patientId, nonEmptySections);
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('[Encounters] Encounter creation failed:', error);
+    console.error('[Encounters] Encounter creation failed:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json(
       { code: 'INTERNAL_ERROR', message: 'Unable to process request. Please try again.' },
       { status: 500 }

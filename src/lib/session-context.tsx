@@ -199,7 +199,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
 
         if (response.ok) {
           const data = await response.json();
-          console.log('[Session] Poll response:', JSON.stringify(data).substring(0, 200));
+          console.log('[Session] Poll response received:', { hasClinicalNote: !!data.clinicalNote, hasAfterVisitSummary: !!data.afterVisitSummary });
           if (data.clinicalNote || data.afterVisitSummary) {
             dispatch({
               type: 'SET_OUTPUTS',
