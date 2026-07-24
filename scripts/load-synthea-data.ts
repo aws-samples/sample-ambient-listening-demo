@@ -223,13 +223,12 @@ export async function loadSyntheaData(
       if (result.success) {
         console.log(`✓ Loaded: ${filename}`);
       } else {
-        // Log rejection with bundle filename and continue (Requirement 2.4)
-        console.error(`✗ Failed: ${filename} — ${result.error}`);
+        // Log rejection with bundle filename only (error details may contain PHI)
+        console.error(`✗ Failed: ${filename}`);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`✗ Failed: ${filename} — ${errorMessage}`);
-      results.push({ filename, success: false, error: errorMessage });
+      console.error(`✗ Failed: ${filename}`);
+      results.push({ filename, success: false, error: error instanceof Error ? error.name : 'Unknown error' });
     }
   }
 

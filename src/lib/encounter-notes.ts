@@ -170,10 +170,15 @@ Note: ${noteContent.substring(0, 2000)}`;
     }));
 
     const outputText = response.output?.message?.content?.[0]?.text?.trim() || '';
+    // Output validation: verify the summary contains substantive content
+    if (outputText.length < 10) {
+      return ''; // Too short to be meaningful — callers should show full note text
+    }
     return outputText;
   } catch (error) {
-    console.error('[EncounterNotes] Bedrock summarization error:', error instanceof Error ? error.name : 'Unknown error');
-    return '';
+    // Log error type only — error messages may contain clinical note content
+    console.error('[EncounterNotes] Bedrock summarization failed:', error instanceof Error ? error.name : 'Unknown');
+    return ''; // Callers should display the original note text when summarization is unavailable
   }
 }
 

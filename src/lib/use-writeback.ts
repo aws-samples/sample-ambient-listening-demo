@@ -58,6 +58,17 @@ export function useWriteBack(options: UseWriteBackOptions = {}): UseWriteBackRet
   const [lastParams, setLastParams] = useState<WriteBackParams | null>(null);
 
   const performWriteBack = useCallback(async (params: WriteBackParams, currentRetryCount: number) => {
+    // Output validation: verify AI-generated content meets minimum quality requirements
+    // before allowing write-back to the patient record
+    if (!params.clinicalNote || params.clinicalNote.trim().length < 50) {
+      setState(prev => ({
+        ...prev,
+        status: 'error',
+        error: 'Clinical note content is too short or empty. Please review and edit before submitting.',
+      }));
+      return;
+    }
+
     setState(prev => ({
       ...prev,
       status: 'saving',

@@ -391,8 +391,10 @@ export class DemoAppStack extends cdk.Stack {
 
     // Amazon Connect Health permissions for ambient documentation session management.
     // NOTE: The service namespace is "health-agent" (not "connecthealth").
-    // StartMedicalScribeListeningSession and GetMedicalScribeListeningSession do not
-    // support resource-level permissions per AWS documentation.
+    // Per AWS IAM documentation, all health-agent actions require Resource: '*' as
+    // the service does not support resource-level permissions for any action.
+    // Verified: StartMedicalScribeListeningSession, GetMedicalScribeListeningSession,
+    // GetDomain, ListDomains, ListSubscriptions, GetSubscription — all require '*'.
     this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
       sid: 'ConnectHealthSessionAccess',
       effect: iam.Effect.ALLOW,
@@ -404,7 +406,6 @@ export class DemoAppStack extends cdk.Stack {
         'health-agent:ListSubscriptions',
         'health-agent:GetSubscription',
       ],
-      // Read/list actions and session actions do not support resource-level permissions
       resources: ['*'],
     }));
 
@@ -879,12 +880,6 @@ exports.handler = async (event) => {
         credentialsSecretArn,
         dbSecretArn,
       ],
-    }));
-
-    // Grant Lambda permission to list secrets (needed to find OpenEMR admin password)
-    dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['secretsmanager:ListSecrets'],
-      resources: ['*'],
     }));
 
     // Grant Lambda permission to describe RDS clusters (to get correct endpoint)

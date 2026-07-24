@@ -116,7 +116,7 @@ export class WebSocketAudioHandler {
     if (!session) {
       this.sendMessage({ type: 'error', data: {
         code: 'SESSION_NOT_FOUND',
-        message: `Session not found: ${this.sessionId}`,
+        message: 'Session not found',
         retryable: false,
       }});
       this.ws.close(4004, 'Session not found');

@@ -85,7 +85,7 @@ export async function GET(
     fhirClient.getEncounters(patientId),
   ]);
 
-  // Debug allergy field mapping verification removed — contained PHI
+  // Allergy field mapping handled internally
 
   // Attach clinical note summaries to encounters via direct DB query + Bedrock summarization
   let enrichedEncounters = encounters;

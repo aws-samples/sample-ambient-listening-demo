@@ -137,12 +137,18 @@ This demo follows HIPAA security best practices:
 
 ## Responsible AI
 
-This application uses AI services (Amazon Connect Health Medical Scribe and Amazon Bedrock) to generate clinical documentation. The following principles apply:
+This application uses AI services to generate clinical documentation:
 
-- **Human-in-the-loop**: All AI-generated clinical notes require clinician review and approval before being written to the patient record. The UI provides an editable interface and confirmation dialog to enforce this workflow.
+- **Amazon Connect Health Ambient Listening** — a fully managed AWS service that transcribes clinical conversations and generates structured SOAP notes. Safety and content controls are built into the service and managed by AWS. No separate guardrails configuration is required or supported for this service.
+- **Amazon Bedrock (Nova Lite)** — used for clinical note summarization. Bedrock Guardrails are configured via environment variables (`BEDROCK_GUARDRAIL_ID`, `BEDROCK_GUARDRAIL_VERSION`) for content filtering and output validation.
+
+The following principles apply:
+
+- **Human-in-the-loop**: All AI-generated clinical notes require clinician review and approval before being written to the patient record. The UI provides an editable interface and confirmation dialog to enforce this workflow. Clinicians must verify all AI-generated content against the original transcript and patient context.
 - **Assistive, not deterministic**: AI-generated SOAP notes, transcriptions, and summaries are assistive tools. The clinician maintains full clinical responsibility for all documentation and patient care decisions.
 - **No autonomous medical decisions**: AI outputs from this system should not be used as the sole basis for medical diagnoses, treatment plans, or clinical decisions.
-- **Content filtering**: For production deployments, enable [Amazon Bedrock Guardrails](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html) for content filtering on all model invocations.
+- **Content filtering**: Amazon Bedrock Guardrails are enabled for clinical note summarization (see `BEDROCK_GUARDRAIL_ID` env var). Amazon Connect Health Ambient Listening includes built-in content safety managed by AWS.
+- **Output validation**: AI-generated clinical summaries are validated for non-empty content before display. The clinician review step serves as the final validation gate — summaries that are incomplete or inaccurate should be edited or regenerated.
 - **Bias and fairness**: Clinical AI systems may reflect biases present in training data. Regularly evaluate outputs for fairness across patient demographics and clinical contexts.
 - **Transparency**: Patients and clinicians should be informed when AI-assisted documentation is in use. AI-generated content is clearly labeled in the UI.
 - **Data privacy**: Patient context sent to AI services is limited to what is clinically necessary. All data handling follows HIPAA requirements with encryption in transit and at rest.

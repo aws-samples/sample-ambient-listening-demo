@@ -174,7 +174,7 @@ export async function getEncounterNotes(patientUuid: string, region: string): Pr
 
     return notes;
   } catch (error) {
-    console.error('[ClinicalNotes] DB query error:', error instanceof Error ? error.message : error);
+    console.error('[ClinicalNotes] DB query error:', error instanceof Error ? error.name : 'Unknown');
     return [];
   } finally {
     if (connection) {

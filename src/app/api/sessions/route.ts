@@ -78,8 +78,10 @@ export async function POST(request: Request) {
     // Step 3: Generate session ID and register in stream registry
     const sessionId = crypto.randomUUID();
 
-    // Sanitize patient context for Connect Health API
-    const sanitizedContext = patientContext.replace(/[^a-zA-Z0-9\s*_\-#\[\]()\.,;:!?'"`<>~/]/g, ' ').replace(/\s{2,}/g, ' ');
+    // Sanitize patient context for Connect Health API.
+    // This allowlist preserves standard medical notation (units, abbreviations, punctuation)
+    // while removing control characters and invalid Unicode that could break the API.
+    const sanitizedContext = patientContext.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{2,}/g, ' ');
 
     // Step 4: Session registration happens in audio-stream route on first chunk
     // This avoids the Next.js module isolation issue where in-memory state

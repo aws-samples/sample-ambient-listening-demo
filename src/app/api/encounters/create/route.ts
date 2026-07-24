@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('[Encounters] Encounter creation failed:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('[Encounters] Encounter creation failed:', error instanceof Error ? error.name : 'Unknown');
     return NextResponse.json(
       { code: 'INTERNAL_ERROR', message: 'Unable to process request. Please try again.' },
       { status: 500 }
