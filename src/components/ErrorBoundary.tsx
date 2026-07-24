@@ -244,7 +244,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, _errorInfo: ErrorInfo): void {
     // Log only error metadata — full error objects may contain PHI from component state
-    console.error('[ErrorBoundary] Caught error:', error.name, error.message);
+    console.error('[ErrorBoundary] Caught error:', error.name);
   }
 
   handleReset = (): void => {

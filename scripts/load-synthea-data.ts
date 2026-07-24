@@ -211,6 +211,8 @@ export async function loadSyntheaData(
   }
 
   const results: LoadResult[] = [];
+  let loadedCount = 0;
+  let failedCount = 0;
 
   for (const filePath of jsonFiles) {
     const filename = path.basename(filePath);
@@ -221,16 +223,17 @@ export async function loadSyntheaData(
       results.push(result);
 
       if (result.success) {
-        console.log(`✓ Loaded: ${filename}`);
+        loadedCount++;
       } else {
-        // Log rejection with bundle filename only (error details may contain PHI)
-        console.error(`✗ Failed: ${filename}`);
+        failedCount++;
       }
     } catch (error) {
-      console.error(`✗ Failed: ${filename}`);
+      failedCount++;
       results.push({ filename, success: false, error: error instanceof Error ? error.name : 'Unknown error' });
     }
   }
+
+  console.log(`Loaded ${loadedCount} bundles, ${failedCount} failed`);
 
   const successful = results.filter((r) => r.success).length;
   const failed = results.filter((r) => !r.success).length;

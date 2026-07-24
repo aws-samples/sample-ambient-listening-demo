@@ -882,10 +882,12 @@ exports.handler = async (event) => {
       ],
     }));
 
-    // Grant Lambda permission to describe RDS clusters (to get correct endpoint)
+    // Grant Lambda permission to describe RDS clusters (to get correct endpoint).
+    // rds:DescribeDBClusters requires Resource: '*' by API design — cannot be scoped
+    // to specific cluster ARNs. This is a read-only discovery action.
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['rds:DescribeDBClusters'],
-      resources: ['*'],
+      resources: ['*'], // Required: DescribeDBClusters does not support resource-level permissions
     }));
 
     // Grant Lambda access to read Synthea bundles from S3

@@ -364,7 +364,7 @@ log "Step 2/3: Deploying Demo App stack (~15 minutes)..."
 echo "───────────────────────────────────────────────────────────────"
 
 cd "$SCRIPT_DIR/infrastructure/demo-app"
-npm install --quiet
+npm ci --quiet
 
 # Get the OpenEMR VPC ID to deploy into the same network
 OPENEMR_VPC_ID=$(aws ec2 describe-vpcs --region "$REGION" \

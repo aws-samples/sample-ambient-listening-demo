@@ -98,10 +98,10 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Sessions] Session creation failed:', message);
+    const errorName = error instanceof Error ? error.name : 'Unknown';
+    console.error('[Sessions] Session creation failed:', errorName);
     return NextResponse.json(
-      { code: 'SESSION_CREATION_FAILED', message, retryable: false },
+      { code: 'SESSION_CREATION_FAILED', message: 'Session creation failed', retryable: false },
       { status: 500 }
     );
   }

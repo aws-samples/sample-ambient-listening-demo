@@ -55,7 +55,7 @@ echo ""
 
 log "Destroying Demo App stack..."
 cd "$SCRIPT_DIR/infrastructure/demo-app"
-npm install --quiet 2>/dev/null || true
+npm ci --quiet 2>/dev/null || true
 
 # Remove DB security group ingress rules referencing the Demo App ECS SG
 # (prevents cross-SG dependency from blocking deletion)
