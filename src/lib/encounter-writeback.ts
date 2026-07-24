@@ -227,7 +227,7 @@ export async function createEncounterWithNote(
       `INSERT INTO form_clinical_notes 
        (form_id, date, pid, encounter, user, groupname, authorized, activity, code, codetext, description, clinical_notes_type, note_related_to)
        VALUES (?, CURDATE(), ?, ?, 'admin', 'Default', 1, 1, 'LOINC:34109-9', 'General Note', ?, 'progress_note', '[]')`,
-      [nextFormId, pid, String(encounterNum), noteContent]
+      [nextFormId, pid, encounterNum, noteContent]
     );
     console.log(`[Writeback] Clinical note inserted`);
 
