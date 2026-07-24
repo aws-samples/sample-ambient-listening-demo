@@ -51,6 +51,7 @@ The deploying principal (IAM user or role) requires the following IAM policy act
       "Action": [
         "cloudformation:*"
       ],
+      "Comment": "For production, restrict to specific actions: CreateStack, UpdateStack, DeleteStack, DescribeStacks, GetTemplate, ListStacks",
       "Resource": [
         "arn:aws:cloudformation:*:*:stack/CDKToolkit/*",
         "arn:aws:cloudformation:*:*:stack/OpenEMRStack/*",
@@ -146,6 +147,7 @@ The deploying principal (IAM user or role) requires the following IAM policy act
       "Action": [
         "elasticloadbalancing:*"
       ],
+      "Comment": "For production, restrict to specific actions: CreateLoadBalancer, DeleteLoadBalancer, CreateTargetGroup, RegisterTargets, CreateListener, DeleteListener",
       "Resource": [
         "arn:aws:elasticloadbalancing:*:*:targetgroup/OpenEMR*/*",
         "arn:aws:elasticloadbalancing:*:*:targetgroup/DemoAp*/*",

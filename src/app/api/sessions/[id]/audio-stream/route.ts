@@ -117,8 +117,8 @@ export async function POST(
     const client = new ConnectHealthClient({ region });
 
     startStream(client, sessionId, session, s3Bucket).catch(err => {
-      console.error(`[AudioStream] Stream error for ${sessionId}:`, err.message);
-      session!.streamError = err.message;
+      console.error(`[AudioStream] Stream error:`, err instanceof Error ? err.message : 'Unknown error');
+      session!.streamError = err instanceof Error ? err.message : 'Stream failed';
     });
   }
 

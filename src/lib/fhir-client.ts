@@ -486,9 +486,7 @@ export class FHIRClient {
     const credentials = await this.getCredentials();
     const tokenUrl = `${this.fhirBaseUrl.replace(/\/apis\/default\/fhir\/?$/, '')}/oauth2/default/token`;
 
-    console.log(`[FHIR] Requesting OAuth2 token from: ${tokenUrl}`);
-    console.log(`[FHIR] Using client_id: ${credentials.clientId.substring(0, 10)}...`);
-    console.log(`[FHIR] Using username: ${credentials.username || 'N/A'}`);
+    console.log(`[FHIR] Requesting OAuth2 token`);
 
     const body = new URLSearchParams({
       grant_type: 'password',
@@ -504,7 +502,6 @@ export class FHIRClient {
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      console.log(`[FHIR] Sending token request...`);
       const response = await this.fetchFn(tokenUrl, {
         method: 'POST',
         headers: {
@@ -514,11 +511,9 @@ export class FHIRClient {
         signal: controller.signal,
       });
 
-      console.log(`[FHIR] Token response: ${response.status} ${response.statusText}`);
-
       if (!response.ok) {
         await response.text(); // consume the response body
-        console.log(`[FHIR] Token error: ${response.status} ${response.statusText}`);
+        console.log(`[FHIR] Token request failed: ${response.status}`);
         throw new Error(
           `OAuth2 token request failed: ${response.status} ${response.statusText}`
         );

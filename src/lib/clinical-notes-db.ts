@@ -95,7 +95,7 @@ export async function getEncounterNotes(patientUuid: string, region: string): Pr
         [Buffer.from(patientUuid.replace(/-/g, ''), 'hex')]
       );
       if (!pidRows2 || pidRows2.length === 0) {
-        console.log(`[ClinicalNotes] Patient not found by UUID: ${patientUuid}`);
+        console.log(`[ClinicalNotes] Patient not found by UUID`);
         return [];
       }
     }

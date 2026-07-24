@@ -1,11 +1,11 @@
 # Stage 1: Install production dependencies
-FROM public.ecr.aws/docker/library/node:20-slim AS deps
+FROM public.ecr.aws/docker/library/node:20.18.0-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # Stage 2: Build the Next.js application
-FROM public.ecr.aws/docker/library/node:20-slim AS builder
+FROM public.ecr.aws/docker/library/node:20.18.0-slim AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # Stage 3: Production runtime
-FROM public.ecr.aws/docker/library/node:20-slim AS runner
+FROM public.ecr.aws/docker/library/node:20.18.0-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

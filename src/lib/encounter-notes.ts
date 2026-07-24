@@ -25,6 +25,8 @@ import {
 
 const DB_SECRET_ARN = process.env.DB_SECRET_ARN || '';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const BEDROCK_GUARDRAIL_ID = process.env.BEDROCK_GUARDRAIL_ID || '';
+const BEDROCK_GUARDRAIL_VERSION = process.env.BEDROCK_GUARDRAIL_VERSION || 'DRAFT';
 
 interface DbCredentials {
   host: string;
@@ -159,6 +161,12 @@ Note: ${noteContent.substring(0, 2000)}`;
       modelId: 'us.amazon.nova-lite-v1:0',
       messages: [{ role: 'user', content: [{ text: prompt }] }],
       inferenceConfig: { maxTokens: 500 },
+      ...(BEDROCK_GUARDRAIL_ID && {
+        guardrailConfig: {
+          guardrailIdentifier: BEDROCK_GUARDRAIL_ID,
+          guardrailVersion: BEDROCK_GUARDRAIL_VERSION,
+        },
+      }),
     }));
 
     const outputText = response.output?.message?.content?.[0]?.text?.trim() || '';

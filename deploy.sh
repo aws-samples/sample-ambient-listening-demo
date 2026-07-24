@@ -104,7 +104,7 @@ ok "Region: $REGION"
 # Check required tools
 command -v aws >/dev/null 2>&1 || fail "AWS CLI not found. Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
 command -v node >/dev/null 2>&1 || fail "Node.js not found. Install: https://nodejs.org/"
-command -v cdk >/dev/null 2>&1 || fail "AWS CDK CLI not found. Install: npm install -g aws-cdk"
+command -v cdk >/dev/null 2>&1 || fail "AWS CDK CLI not found. Install: npm install -g aws-cdk@2.150.0"
 command -v python3 >/dev/null 2>&1 || fail "Python 3 not found. Install: https://www.python.org/downloads/"
 ok "Required CLI tools found"
 

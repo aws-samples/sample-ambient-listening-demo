@@ -107,7 +107,7 @@ MARGARET_SMITH = {
     'city': 'Cambridge',
     'state': 'MA',
     'postal_code': '20610',
-    'phone': '230-798-3109',
+    'phone': '555-0123',
     'email': 'margaret.smith99@example.com',
     'pubpid': '5ddfb269',
     'conditions': [

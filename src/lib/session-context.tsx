@@ -173,7 +173,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
       dispatch({ type: 'END_SESSION_SUCCESS', payload: endedSession });
 
       // After session ends, poll for outputs
-      console.log('[Session] Polling for outputs:', state.session.sessionId, state.session.domainId, state.session.subscriptionId);
+      console.log('[Session] Polling for outputs');
       pollForOutputs(state.session.sessionId, state.session.domainId, state.session.subscriptionId);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An unexpected error occurred';

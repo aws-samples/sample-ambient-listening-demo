@@ -1,5 +1,7 @@
 # Amazon Connect Health — Ambient Clinical Documentation Demo
 
+> **Disclaimer**: This sample is provided for demonstration and educational purposes only and is not intended for production use without additional security review and testing. The code has not undergone a formal AppSec review. Before deploying in a production environment, conduct a thorough security assessment, enable all recommended guardrails, and ensure compliance with your organization's security requirements.
+
 A full-stack web application demonstrating end-to-end ambient clinical documentation using [Amazon Connect Health](https://aws.amazon.com/connect/health/) integrated with [OpenEMR](https://www.open-emr.org/) on AWS ECS.
 
 Workshop participants experience the complete workflow: retrieving patient data from an EHR, streaming a clinical conversation via HTTP/2 to Amazon Connect Health, viewing real-time transcription with speaker diarization, and reviewing structured SOAP clinical notes with evidence mapping — all written back to the patient record.
