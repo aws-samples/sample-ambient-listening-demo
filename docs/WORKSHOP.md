@@ -523,7 +523,7 @@ The Demo App stack deploys the Next.js application on ECS Fargate behind an ALB 
 
 ```bash
 cd infrastructure/demo-app
-npm install
+npm install  # Installs exact-pinned versions from package.json (no caret/tilde ranges)
 ```
 
 ### 3.2 Prepare an ACM Certificate
@@ -586,7 +586,7 @@ APP_URL=$(aws cloudformation describe-stacks \
   --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue' \
   --output text)
 
-curl -sk -o /dev/null -w "%{http_code}" "${APP_URL}"
+curl -s -o /dev/null -w "%{http_code}" "${APP_URL}"
 ```
 
 **Expected output:** `200`
@@ -1369,7 +1369,7 @@ amazon-connect-health-ambient/
 cd submodules/openemr && cdk deploy && cd ../demo-app && cdk deploy
 
 # Check application health
-curl -sk $(aws cloudformation describe-stacks --stack-name DemoAppStack \
+curl -s $(aws cloudformation describe-stacks --stack-name DemoAppStack \
   --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue' --output text)
 
 # View application logs

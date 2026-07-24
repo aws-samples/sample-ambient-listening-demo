@@ -102,7 +102,7 @@ app.prepare().then(() => {
   });
 
   server.listen(port, hostname, () => {
-    console.log(`> Ready on http://${hostname}:${port}`);
+    console.log(`> Ready on port ${port} (TLS terminated at ALB)`);
     console.log(`> WebSocket available on port ${port}/ws (TLS terminated at ALB)`);
   });
 });

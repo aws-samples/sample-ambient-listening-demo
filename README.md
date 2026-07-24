@@ -26,7 +26,7 @@ See the [Design Document](.kiro/specs/ambient-clinical-documentation-demo/design
 # Clone with submodules
 git clone --recurse-submodules https://github.com/<org>/amazon-connect-health-ambient.git
 cd amazon-connect-health-ambient
-npm install
+npm install  # All dependencies use exact version pins in package.json
 
 # Deploy to AWS (requires Route53 hosted zone)
 ./deploy.sh --domain your-domain.example.com

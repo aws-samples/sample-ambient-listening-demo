@@ -466,9 +466,10 @@ h3 { font-size: 20px; font-weight: 500; color: var(--muted); margin-bottom: 32px
 
 <!-- SLIDE 3: What We Prove -->
 <div class="slide light" data-notes="Frame the value proposition. Each stat is something you'll prove live in the demo. Under 60 seconds from conversation end to structured note. Zero manual documentation. Fully customizable per specialty. HIPAA validated with cdk-nag. 100% write-back to the EHR.">
-  <h2>What We Prove</h2>
+  <h2>What This Demo Shows</h2>
+  <p style="text-align:center; font-size:12px; color:var(--muted); margin-bottom:12px;">(Based on demo testing with synthetic data, 2024)</p>
   <div class="stats">
-    <div class="stat"><div class="stat-value">&lt;60s</div><div class="stat-label">End-to-end<br>documentation</div></div>
+    <div class="stat"><div class="stat-value">~60s</div><div class="stat-label">End-to-end<br>documentation</div></div>
     <div class="stat"><div class="stat-value">0</div><div class="stat-label">Manual notes<br>required</div></div>
     <div class="stat"><div class="stat-value">100%</div><div class="stat-label">Specialty<br>customizable</div></div>
     <div class="stat"><div class="stat-value">HIPAA</div><div class="stat-label">cdk-nag validated<br>&amp; auditable</div></div>
@@ -638,7 +639,7 @@ h3 { font-size: 20px; font-weight: 500; color: var(--muted); margin-bottom: 32px
 </div>
 
 <!-- SLIDE 9B: AWS Console Walkthrough -->
-<div class="slide light teal-bar" data-notes="Quick tour of the AWS Console to show what's deployed. Show: (1) ECS Cluster — the Fargate service running the Next.js app, task definition with 1 vCPU / 2GB, container port 3000. (2) S3 Bucket — the output bucket with SSE-KMS encryption, block public access, versioning enabled. (3) Secrets Manager — FHIR credentials and DB secret. (4) Connect Health console — the domain and subscription. (5) ALB — target group health, HTTPS listener, WAF association. Keep this quick — 2-3 minutes max. Purpose: show partners it's real infrastructure they can replicate.">
+<div class="slide light teal-bar" data-notes="Quick tour of the AWS Console to show what's deployed. Show: (1) ECS Cluster — the Fargate service running the Next.js app, task definition with 1 vCPU / 2GB, container port 3000. (2) S3 Bucket — the output bucket with SSE-KMS encryption, block public access, versioning enabled. (3) Secrets Manager — FHIR credentials and DB secret. (4) Connect Health console — the domain and subscription. (5) ALB — target group health, HTTPS listener, WAF association. Keep this quick — 2-3 minutes max. Purpose: show APN partners it's real infrastructure they can replicate.">
   <span class="badge teal">CONSOLE</span>
   <h2>AWS Console Walkthrough</h2>
   <h3>What's deployed — a quick tour of the infrastructure</h3>
@@ -855,7 +856,7 @@ h3 { font-size: 20px; font-weight: 500; color: var(--muted); margin-bottom: 32px
 </div>
 
 <!-- SLIDE 9: Customization -->
-<div class="slide dark" data-notes="Key slide for partners: This is NOT a one-size-fits-all transcription tool. Partners can customize 6 levers: (1) Note templates — configure SOAP structure per specialty, (2) Vocabulary — tune medical terms for audiology, cardiology, etc., (3) Speaker roles — support multi-provider scenarios, (4) Patient context — inject relevant history for better notes, (5) Output routing — per-domain S3 paths for multi-tenant deployments, (6) Multi-tenant — separate domains and subscriptions per customer. This is the partner opportunity: build specialty-specific solutions on top of Connect Health.">
+<div class="slide dark" data-notes="Key slide for APN partners: This is NOT a one-size-fits-all transcription tool. APN partners can customize 6 levers: (1) Note templates — configure SOAP structure per specialty, (2) Vocabulary — tune medical terms for audiology, cardiology, etc., (3) Speaker roles — support multi-provider scenarios, (4) Patient context — inject relevant history for better notes, (5) Output routing — per-domain S3 paths for multi-tenant deployments, (6) Multi-tenant — separate domains and subscriptions per customer. This is the APN partner opportunity: build specialty-specific solutions on top of Connect Health.">
   <h2>Customization: Make It Yours</h2>
   <div class="cards cards-2x3" style="margin-top:16px;">
     <div class="card"><div class="card-title" style="color:var(--orange);">Note Templates</div><div class="card-desc">ManagedNoteTemplate — configure SOAP structure per specialty workflow</div></div>
@@ -868,8 +869,9 @@ h3 { font-size: 20px; font-weight: 500; color: var(--muted); margin-bottom: 32px
 </div>
 
 <!-- SLIDE: Pricing -->
-<div class="slide light" data-notes="Frame this as an example — actual pricing may vary by agreement. Key points: (1) Connect Health ambient is $99/provider/month flat subscription — includes 600 encounters which covers most providers. (2) Infrastructure is negligible at ~$87/month and stays flat regardless of provider count. (3) 60-day free trial available for new users. (4) The customer's existing EHR cost is NOT included — they already have it. (5) Infrastructure stays the same whether 50 or 200 providers — only Connect Health scales. This slide is for reference and discussion — encourage partners to run their own scenarios.">
+<div class="slide light" data-notes="Frame this as an example — actual pricing may vary by agreement. Key points: (1) Connect Health ambient is $99/provider/month flat subscription — includes 600 encounters which covers most providers. (2) Infrastructure is negligible at ~$87/month and stays flat regardless of provider count. (3) 60-day free trial available for new users. (4) The customer's existing EHR cost is NOT included — they already have it. (5) Infrastructure stays the same whether 50 or 200 providers — only Connect Health scales. This slide is for reference and discussion — encourage APN partners to run their own scenarios.">
   <h2>Example Pricing: 50-Provider Health System</h2>
+  <p style="text-align:center; font-size:11px; color:var(--muted); margin-bottom:8px;">Pricing estimates are for illustration purposes only and may vary based on actual usage, region, and AWS pricing changes. Consult AWS pricing pages for current rates.</p>
   <h3 style="color:var(--muted); margin-bottom:24px;">Assumptions: Multi-specialty, 200–300 encounters/provider/month, existing EHR in place</h3>
   <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap:32px; flex:1; align-items:start;">
     <div>

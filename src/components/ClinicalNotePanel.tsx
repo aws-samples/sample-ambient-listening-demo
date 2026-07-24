@@ -3,6 +3,13 @@
 /**
  * ClinicalNotePanel — Displays and allows editing of AI-generated clinical notes.
  *
+ * RESPONSIBLE AI: AI-generated clinical notes are assistive outputs only. They must be
+ * reviewed, edited, and approved by a licensed clinician before being written to the
+ * patient's medical record. The editable UI enforces human-in-the-loop validation.
+ * AI outputs should not be used as the sole basis for clinical decisions.
+ * For production deployments, enable Amazon Bedrock Guardrails for content filtering
+ * and configure output validation to detect hallucinated or inappropriate content.
+ *
  * HIPAA NOTICE: This component displays Protected Health Information (PHI) including
  * clinical notes, SOAP sections, and evidence mappings. Ensure the application
  * implements HIPAA-required controls including encryption, access controls, and

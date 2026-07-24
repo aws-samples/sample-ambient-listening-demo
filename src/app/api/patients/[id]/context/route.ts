@@ -94,7 +94,7 @@ export async function GET(
       const pid = await getPatientPidFromUuid(patientId);
       if (pid) {
         const notesWithSummaries = await getEncounterNotesWithSummaries(pid);
-        console.log(`[PatientContext] Bedrock summarized ${notesWithSummaries.length} encounter notes for pid=${pid}`);
+        console.log(`[PatientContext] Bedrock summarized ${notesWithSummaries.length} encounter notes`);
 
         if (notesWithSummaries.length > 0) {
           enrichedEncounters = {
@@ -110,10 +110,10 @@ export async function GET(
           };
         }
       } else {
-        console.log(`[PatientContext] Could not resolve UUID ${patientId} to PID`);
+        console.log(`[PatientContext] Could not resolve patient UUID to PID`);
       }
     } catch (err) {
-      console.log(`[PatientContext] Encounter summary error: ${err instanceof Error ? err.message : err}`);
+      console.log(`[PatientContext] Encounter summary error: ${err instanceof Error ? err.name : 'Unknown error'}`);
     }
   }
 

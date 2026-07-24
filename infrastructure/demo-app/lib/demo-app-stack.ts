@@ -391,33 +391,49 @@ export class DemoAppStack extends cdk.Stack {
 
     // Amazon Connect Health permissions for ambient documentation session management.
     // NOTE: The service namespace is "health-agent" (not "connecthealth").
-    // These actions do not support resource-level permissions — resource '*' is
-    // required per AWS documentation.
+    // StartMedicalScribeListeningSession and GetMedicalScribeListeningSession do not
+    // support resource-level permissions per AWS documentation.
     this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
-      sid: 'ConnectHealthAmbientAccess',
+      sid: 'ConnectHealthSessionAccess',
       effect: iam.Effect.ALLOW,
       actions: [
         'health-agent:StartMedicalScribeListeningSession',
         'health-agent:GetMedicalScribeListeningSession',
-        'health-agent:CreateDomain',
-        'health-agent:CreateSubscription',
         'health-agent:GetDomain',
         'health-agent:ListDomains',
         'health-agent:ListSubscriptions',
         'health-agent:GetSubscription',
       ],
-      // Connect Health does not support resource-level permissions for these actions
+      // Read/list actions and session actions do not support resource-level permissions
       resources: ['*'],
     }));
 
+    // Connect Health mutating actions scoped to the specific domain
+    this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
+      sid: 'ConnectHealthDomainMutationAccess',
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'health-agent:CreateDomain',
+        'health-agent:CreateSubscription',
+      ],
+      resources: [
+        `arn:aws:health-agent:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:domain/*`,
+        `arn:aws:health-agent:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:subscription/*`,
+      ],
+    }));
+
     // Amazon Bedrock permissions for clinical note summarization
+    // Amazon Bedrock permissions for clinical note summarization.
+    // For production, configure Amazon Bedrock Guardrails for content filtering
+    // and output validation on all model invocations (see BEDROCK_GUARDRAIL_ID env var).
     this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
       sid: 'BedrockInvokeModelAccess',
       effect: iam.Effect.ALLOW,
-      actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
+      actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream', 'bedrock:ApplyGuardrail'],
       resources: [
         'arn:aws:bedrock:*::foundation-model/*',
         `arn:aws:bedrock:*:${cdk.Aws.ACCOUNT_ID}:inference-profile/*`,
+        `arn:aws:bedrock:*:${cdk.Aws.ACCOUNT_ID}:guardrail/*`,
       ],
     }));
 
@@ -437,8 +453,11 @@ export class DemoAppStack extends cdk.Stack {
     }));
 
     // KMS decrypt/encrypt permission for output bucket key, secrets key, and OpenEMR stack's KMS key.
-    // The OpenEMR stack's KMS key ARN is not available via SSM, so we use a scoped wildcard
-    // with a ViaService condition to restrict usage to Secrets Manager and S3 only.
+    // The OpenEMR KMS key ARN is published to SSM by deploy.sh after stack creation.
+    const openemrKmsKeyArn = ssm.StringParameter.valueForStringParameter(
+      this, `/${openemrStackName}/KmsKeyArn`
+    );
+
     this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
       sid: 'KmsDecryptForKnownKeys',
       effect: iam.Effect.ALLOW,
@@ -446,24 +465,8 @@ export class DemoAppStack extends cdk.Stack {
       resources: [
         this.outputBucketKey.keyArn,
         secretsKey.keyArn,
+        openemrKmsKeyArn,
       ],
-    }));
-
-    this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
-      sid: 'KmsDecryptForOpenEmrSecrets',
-      effect: iam.Effect.ALLOW,
-      actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-      resources: [
-        `arn:aws:kms:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:key/*`,
-      ],
-      conditions: {
-        StringEquals: {
-          'kms:ViaService': [
-            `secretsmanager.${cdk.Aws.REGION}.amazonaws.com`,
-            `s3.${cdk.Aws.REGION}.amazonaws.com`,
-          ],
-        },
-      },
     }));
 
     // Secrets Manager read access scoped to the specific secret ARNs
@@ -867,14 +870,14 @@ exports.handler = async (event) => {
     });
 
     // Grant Lambda access to read the OpenEMR database secret.
-    // The Lambda discovers the DB secret at runtime via ListSecrets (the ARN suffix changes per deploy),
-    // so prefix patterns are needed here. The Password secret ARN is available from SSM.
+    // The DB secret ARN is retrieved from SSM (published by deploy.sh).
+    // credentialsSecretArn is the OpenEMR admin password secret.
+    const dbSecretArn = ssm.StringParameter.valueForStringParameter(this, `/${openemrStackName}/DatabaseSecretArn`);
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['secretsmanager:GetSecretValue'],
       resources: [
         credentialsSecretArn,
-        `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:dbsecret*`,
-        `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:RdsSlotSecret*`,
+        dbSecretArn,
       ],
     }));
 
@@ -900,22 +903,10 @@ exports.handler = async (event) => {
       resources: [this.fhirApiCredentials.secretArn, this.openemrAdminCredentials.secretArn],
     }));
 
-    // Grant KMS decrypt/encrypt for the Demo App secrets key and output bucket key
+    // Grant KMS decrypt/encrypt for the Demo App secrets key, output bucket key, and OpenEMR key
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey', 'kms:GenerateDataKey*'],
-      resources: [this.outputBucketKey.keyArn, secretsKey.keyArn],
-    }));
-
-    // Grant KMS decrypt for OpenEMR stack's KMS key (exact ARN not available via SSM),
-    // scoped to Secrets Manager usage only via kms:ViaService condition
-    dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-      resources: [`arn:aws:kms:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:key/*`],
-      conditions: {
-        StringEquals: {
-          'kms:ViaService': `secretsmanager.${cdk.Aws.REGION}.amazonaws.com`,
-        },
-      },
+      resources: [this.outputBucketKey.keyArn, secretsKey.keyArn, openemrKmsKeyArn],
     }));
 
     // Data loader is invoked by deploy.sh after security group rules are configured.

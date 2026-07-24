@@ -316,11 +316,24 @@ WEB_CONSOLE_URL=$(aws cloudformation describe-stacks \
   --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
   --output text 2>/dev/null) || true
 
+# Get KMS key ARN used by the OpenEMR stack for secret encryption
+OPENEMR_KMS_KEY_ARN=$(aws cloudformation describe-stack-resources \
+  --stack-name "$OPENEMR_STACK_NAME" \
+  --region "$REGION" \
+  --query 'StackResources[?ResourceType==`AWS::KMS::Key`].PhysicalResourceId' \
+  --output text 2>/dev/null | head -1) || true
+if [[ -n "$OPENEMR_KMS_KEY_ARN" && "$OPENEMR_KMS_KEY_ARN" != "None" ]]; then
+  OPENEMR_KMS_KEY_ARN="arn:aws:kms:${REGION}:$(aws sts get-caller-identity --query Account --output text):key/${OPENEMR_KMS_KEY_ARN}"
+fi
+
 # Write SSM parameters that the Demo App stack expects
 aws ssm put-parameter --name "/OpenEmrStack/FhirApiBaseUrl" --value "$FHIR_BASE_URL" --type String --overwrite --region "$REGION" >/dev/null 2>&1
 aws ssm put-parameter --name "/OpenEmrStack/CredentialsSecretArn" --value "$CREDS_SECRET_ARN" --type String --overwrite --region "$REGION" >/dev/null 2>&1
 aws ssm put-parameter --name "/OpenEmrStack/DatabaseSecretArn" --value "$DB_SECRET_ARN" --type String --overwrite --region "$REGION" >/dev/null 2>&1
 aws ssm put-parameter --name "/OpenEmrStack/WebConsoleUrl" --value "$WEB_CONSOLE_URL" --type String --overwrite --region "$REGION" >/dev/null 2>&1
+if [[ -n "$OPENEMR_KMS_KEY_ARN" && "$OPENEMR_KMS_KEY_ARN" != "None" ]]; then
+  aws ssm put-parameter --name "/OpenEmrStack/KmsKeyArn" --value "$OPENEMR_KMS_KEY_ARN" --type String --overwrite --region "$REGION" >/dev/null 2>&1
+fi
 
 ok "SSM parameters published"
 

@@ -172,7 +172,7 @@ Note: ${noteContent.substring(0, 2000)}`;
     const outputText = response.output?.message?.content?.[0]?.text?.trim() || '';
     return outputText;
   } catch (error) {
-    console.error('[EncounterNotes] Bedrock summarization error:', error instanceof Error ? error.message : error);
+    console.error('[EncounterNotes] Bedrock summarization error:', error instanceof Error ? error.name : 'Unknown error');
     return '';
   }
 }

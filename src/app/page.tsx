@@ -37,7 +37,7 @@ function AmbientDocumentationContent() {
   // When session becomes active, start streaming audio and listening for transcripts
   useEffect(() => {
     if (isSessionActive && session && !isStreaming) {
-      console.log('[Ambient] Session active, starting audio streaming...', { sessionId: session.sessionId, audioSource });
+      console.log('[Ambient] Session active, starting audio streaming...', { audioSource });
 
       // Start audio streaming based on source
       if (audioSource === 'wav' && wavFile) {
@@ -61,7 +61,7 @@ function AmbientDocumentationContent() {
    */
   async function streamWavFile(file: File, sessionId: string) {
     setIsStreaming(true);
-    console.log('[Ambient] Starting WAV file streaming for session:', sessionId);
+    console.log('[Ambient] Starting WAV file streaming');
     try {
       const arrayBuffer = await file.arrayBuffer();
       const view = new DataView(arrayBuffer);
@@ -171,9 +171,9 @@ function AmbientDocumentationContent() {
   /**
    * Starts capturing microphone audio and streaming to the audio-stream endpoint.
    */
-  async function startMicrophoneStreaming(sessionId: string) {
+  async function startMicrophoneStreaming(_sessionId: string) {
     setIsStreaming(true);
-    console.log('[Ambient] Starting microphone streaming for session:', sessionId);
+    console.log('[Ambient] Starting microphone streaming');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {

@@ -601,7 +601,7 @@ def register_oauth_client(cursor, connection):
     fhir_secret_arn = os.environ.get('FHIR_CREDENTIALS_SECRET_ARN', '')
     if fhir_secret_arn:
         # Get admin password
-        admin_password = ''
+        admin_password = ''  # nosec B105 - initialized empty, populated from Secrets Manager below
         try:
             paginator = secrets_client.get_paginator('list_secrets')
             for page in paginator.paginate(Filters=[{'Key': 'name', 'Values': ['Password67973E0B']}]):
@@ -760,10 +760,8 @@ def handler(event, context):
         })
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return send_response(event, context, 'FAILED', {'Message': str(e)})
+        print(f"ERROR: {type(e).__name__}")
+        return send_response(event, context, 'FAILED', {'Message': type(e).__name__})
 
 
 def send_response(event, context, status, data):
@@ -789,7 +787,7 @@ def send_response(event, context, status, data):
             method='PUT'
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # nosec B310 - URL is CloudFormation pre-signed response URL
         except Exception as e:
             print(f"Failed to send CFN response: {e}")
 

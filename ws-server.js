@@ -26,7 +26,8 @@ const {
 
 const WS_PORT = 3001;
 
-// Create HTTP server for ALB health checks
+// Create HTTP server for ALB health checks (TLS terminated at ALB layer)
+// nosemgrep: problem-based-packs.insecure-transport.js-node.using-http-server
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');

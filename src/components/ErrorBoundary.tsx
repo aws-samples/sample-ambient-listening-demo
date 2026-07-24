@@ -242,10 +242,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log error details for debugging
-    console.error('[ErrorBoundary] Caught error:', error);
-    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+  componentDidCatch(error: Error, _errorInfo: ErrorInfo): void {
+    // Log only error metadata — full error objects may contain PHI from component state
+    console.error('[ErrorBoundary] Caught error:', error.name, error.message);
   }
 
   handleReset = (): void => {
