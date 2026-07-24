@@ -36,7 +36,7 @@ export async function POST(
     // The END_OF_SESSION control event is sent through the audio stream
     // by the client-side AudioStreamer. This endpoint acknowledges the end
     // and returns the timestamp for the UI to display.
-    console.log(`[Sessions API] Session ${sessionId} ended`);
+    console.log(`[Sessions API] Session ended`);
 
     return NextResponse.json({
       status: 'ended',
@@ -44,11 +44,11 @@ export async function POST(
       endedAt: new Date().toISOString(),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Sessions API] Error ending session:`, message);
+    const errorName = error instanceof Error ? error.name : 'Unknown';
+    console.error(`[Sessions API] Error ending session:`, errorName);
 
     return NextResponse.json(
-      { code: 'SESSION_END_FAILED', message, retryable: false },
+      { code: 'SESSION_END_FAILED', message: 'Failed to end session', retryable: false },
       { status: 500 }
     );
   }

@@ -68,7 +68,7 @@ function handleWebSocketConnection(ws) {
       const msg = JSON.parse(data.toString());
 
       if (msg.type === 'start') {
-        console.log(`[WS] Starting stream for ${msg.sessionId} at ${msg.sampleRate}Hz`);
+        console.log(`[WS] Starting stream at ${msg.sampleRate}Hz`);
         startConnectHealthStream(ws, msg, audioQueue, () => ended, (r) => { audioResolve = r; })
           .catch(err => {
             console.error(`[WS] Stream error:`, err.message);
@@ -150,7 +150,7 @@ async function startConnectHealthStream(ws, session, audioQueue, isEnded, setRes
     },
   };
 
-  console.log(`[WS] Starting Connect Health stream for ${session.sessionId}`);
+  console.log(`[WS] Starting Connect Health stream`);
 
   const command = new StartMedicalScribeListeningSessionCommand({
     sessionId: session.sessionId,
@@ -163,7 +163,7 @@ async function startConnectHealthStream(ws, session, audioQueue, isEnded, setRes
   });
 
   const response = await client.send(command);
-  console.log(`[WS] Stream connected for ${session.sessionId}`);
+  console.log(`[WS] Stream connected`);
 
   // Notify client that stream is ready — client will flush buffered audio
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ready' }));
@@ -187,6 +187,6 @@ async function startConnectHealthStream(ws, session, audioQueue, isEnded, setRes
     }
   }
 
-  console.log(`[WS] Stream completed for ${session.sessionId}`);
+  console.log(`[WS] Stream completed`);
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'complete' }));
 }

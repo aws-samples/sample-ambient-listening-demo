@@ -76,7 +76,7 @@ app.prepare().then(() => {
 
         if (msg.type === 'start') {
           session = msg;
-          console.log(`[WS] Starting stream for ${session.sessionId} at ${session.sampleRate}Hz`);
+          console.log(`[WS] Starting stream at ${session.sampleRate}Hz`);
           startConnectHealthStream(ws, session, audioQueue, () => audioResolve, (r) => { audioResolve = r; }, () => ended)
             .catch(err => {
               console.error(`[WS] Stream error:`, err.message);
@@ -146,7 +146,7 @@ async function startConnectHealthStream(ws, session, audioQueue, getResolve, set
     },
   };
 
-  console.log(`[WS] Starting Connect Health stream for ${session.sessionId}`);
+  console.log(`[WS] Starting Connect Health stream`);
 
   const command = new StartMedicalScribeListeningSessionCommand({
     sessionId: session.sessionId,
@@ -159,7 +159,7 @@ async function startConnectHealthStream(ws, session, audioQueue, getResolve, set
   });
 
   const response = await client.send(command);
-  console.log(`[WS] Stream connected for ${session.sessionId}`);
+  console.log(`[WS] Stream connected`);
 
   if (response.responseStream) {
     for await (const event of response.responseStream) {
@@ -180,6 +180,6 @@ async function startConnectHealthStream(ws, session, audioQueue, getResolve, set
     }
   }
 
-  console.log(`[WS] Stream completed for ${session.sessionId}`);
+  console.log(`[WS] Stream completed`);
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'complete' }));
 }

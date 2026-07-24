@@ -423,8 +423,8 @@ export class DemoAppStack extends cdk.Stack {
       ],
     }));
 
-    // Amazon Bedrock permissions for clinical note summarization
     // Amazon Bedrock permissions for clinical note summarization.
+    // Scoped to the specific Nova Lite model used for summarization.
     // For production, configure Amazon Bedrock Guardrails for content filtering
     // and output validation on all model invocations (see BEDROCK_GUARDRAIL_ID env var).
     this.ecsTaskRole.addToPolicy(new iam.PolicyStatement({
@@ -432,9 +432,9 @@ export class DemoAppStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream', 'bedrock:ApplyGuardrail'],
       resources: [
-        'arn:aws:bedrock:*::foundation-model/*',
-        `arn:aws:bedrock:*:${cdk.Aws.ACCOUNT_ID}:inference-profile/*`,
-        `arn:aws:bedrock:*:${cdk.Aws.ACCOUNT_ID}:guardrail/*`,
+        `arn:aws:bedrock:${cdk.Aws.REGION}::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:inference-profile/us.amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:guardrail/*`,
       ],
     }));
 

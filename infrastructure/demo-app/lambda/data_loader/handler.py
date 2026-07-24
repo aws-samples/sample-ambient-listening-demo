@@ -4,6 +4,11 @@ Data Loader Lambda for the Ambient Clinical Documentation Demo.
 Loads patient data into OpenEMR from Synthea-generated FHIR R4 bundles stored in S3.
 Also ensures Margaret Smith (demo patient) exists and registers the OAuth2 client.
 
+HIPAA NOTICE: This Lambda processes Protected Health Information (PHI) including
+patient demographics, conditions, medications, and allergies. Ensure HIPAA controls
+are in place including encryption at rest and in transit, access logging, and BAA
+agreements with AWS. This demo uses synthetic (Synthea-generated) data only.
+
 This Lambda is triggered:
 1. As a CDK custom resource during deployment (skips if no S3 data yet)
 2. Manually by deploy.sh after Synthea bundles are uploaded to S3

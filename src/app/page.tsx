@@ -37,7 +37,7 @@ function AmbientDocumentationContent() {
   // When session becomes active, start streaming audio and listening for transcripts
   useEffect(() => {
     if (isSessionActive && session && !isStreaming) {
-      console.log('[Ambient] Session active, starting audio streaming...', { audioSource });
+      console.log('[Ambient] Session active, starting audio streaming...');
 
       // Start audio streaming based on source
       if (audioSource === 'wav' && wavFile) {
