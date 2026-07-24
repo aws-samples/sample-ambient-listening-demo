@@ -147,21 +147,6 @@ This application uses AI services (Amazon Connect Health Medical Scribe and Amaz
 - **Transparency**: Patients and clinicians should be informed when AI-assisted documentation is in use. AI-generated content is clearly labeled in the UI.
 - **Data privacy**: Patient context sent to AI services is limited to what is clinically necessary. All data handling follows HIPAA requirements with encryption in transit and at rest.
 
-## Workshop Guide
-
-The comprehensive workshop guide covers everything from infrastructure deployment to running the full demo:
-
-📖 **[docs/WORKSHOP.md](docs/WORKSHOP.md)**
-
-Topics covered:
-- Prerequisites and AWS permissions
-- Infrastructure deployment (OpenEMR + Demo App stacks)
-- Synthetic patient data loading with Synthea
-- Application configuration and verification
-- Running the ambient documentation demo
-- Troubleshooting common issues
-- Cost estimates and teardown instructions
-
 ## License
 
 This project is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file for details.
