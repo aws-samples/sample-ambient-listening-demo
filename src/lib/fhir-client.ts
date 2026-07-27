@@ -531,7 +531,7 @@ export class FHIRClient {
           `OAuth2 token request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds`
         );
       }
-      console.log(`[FHIR] Token request ERROR: ${error instanceof Error ? error.message : error}`);
+      console.log(`[FHIR] Token request ERROR: ${error instanceof Error ? error.name : 'Unknown'}`);
       throw error;
     } finally {
       clearTimeout(timeoutId);
