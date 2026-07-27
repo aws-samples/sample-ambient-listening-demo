@@ -316,12 +316,12 @@ WEB_CONSOLE_URL=$(aws cloudformation describe-stacks \
   --query 'Stacks[0].Outputs[?OutputKey==`ApplicationURL`].OutputValue' \
   --output text 2>/dev/null) || true
 
-# Get KMS key ARN used by the OpenEMR stack for secret encryption
+# Get KMS key ARN used by the OpenEMR stack for secret encryption (CentralEncryptionKey)
 OPENEMR_KMS_KEY_ARN=$(aws cloudformation describe-stack-resources \
   --stack-name "$OPENEMR_STACK_NAME" \
   --region "$REGION" \
-  --query 'StackResources[?ResourceType==`AWS::KMS::Key`].PhysicalResourceId' \
-  --output text 2>/dev/null | head -1) || true
+  --query 'StackResources[?ResourceType==`AWS::KMS::Key` && contains(LogicalResourceId, `CentralEncryption`)].PhysicalResourceId' \
+  --output text 2>/dev/null) || true
 if [[ -n "$OPENEMR_KMS_KEY_ARN" && "$OPENEMR_KMS_KEY_ARN" != "None" ]]; then
   OPENEMR_KMS_KEY_ARN="arn:aws:kms:${REGION}:$(aws sts get-caller-identity --query Account --output text):key/${OPENEMR_KMS_KEY_ARN}"
 fi

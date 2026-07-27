@@ -870,9 +870,9 @@ exports.handler = async (event) => {
       securityGroups: [this.ecsSecurityGroup],
     });
 
-    // Grant Lambda access to read the OpenEMR database secret.
-    // The DB secret ARN is retrieved from SSM (published by deploy.sh).
-    // credentialsSecretArn is the OpenEMR admin password secret.
+    // Grant Lambda access to read OpenEMR secrets (DB secret, admin password).
+    // SSM parameters are published by deploy.sh BEFORE this stack deploys,
+    // ensuring these resolve to the correct ARNs.
     const dbSecretArn = ssm.StringParameter.valueForStringParameter(this, `/${openemrStackName}/DatabaseSecretArn`);
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['secretsmanager:GetSecretValue'],
@@ -907,9 +907,10 @@ exports.handler = async (event) => {
       resources: [this.fhirApiCredentials.secretArn, this.openemrAdminCredentials.secretArn],
     }));
 
-    // Grant KMS decrypt/encrypt for the Demo App secrets key, output bucket key, and OpenEMR key
+    // Grant KMS decrypt/encrypt for the Demo App secrets key, output bucket key, and OpenEMR key.
+    // openemrKmsKeyArn is resolved from SSM, published by deploy.sh before this stack deploys.
     dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey', 'kms:GenerateDataKey*'],
+      actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
       resources: [this.outputBucketKey.keyArn, secretsKey.keyArn, openemrKmsKeyArn],
     }));
 
