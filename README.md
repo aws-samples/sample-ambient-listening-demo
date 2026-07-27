@@ -75,7 +75,7 @@ git submodule update --init --recursive
 ## Prerequisites
 
 - Node.js 20 LTS
-- **Java 11+** (required for Synthea synthetic patient data generation)
+- **Java 17+** (required for Synthea synthetic patient data generation)
 - Python 3.9+ (for OpenEMR CDK stack)
 - AWS CDK CLI 2.150+ (`npm install -g aws-cdk@2.150.0`)
 - AWS CLI 2.15+ configured with appropriate credentials

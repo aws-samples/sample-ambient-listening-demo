@@ -471,6 +471,9 @@ if [[ "$SKIP_DATA_LOAD" == "false" ]]; then
     git -C "$SCRIPT_DIR" submodule update --init submodules/synthea || fail "Failed to initialize Synthea submodule"
   fi
 
+  # Ensure execute permissions on Synthea scripts (git may not preserve them)
+  chmod +x "$SYNTHEA_DIR/run_synthea" "$SYNTHEA_DIR/gradlew" 2>/dev/null || true
+
   # Generate 100 patients in Massachusetts (seed 12345 for reproducibility)
   if [[ ! -d "$SYNTHEA_OUTPUT" ]] || [[ $(ls "$SYNTHEA_OUTPUT"/*.json 2>/dev/null | wc -l) -lt 10 ]]; then
     log "Running Synthea to generate 100 patients..."

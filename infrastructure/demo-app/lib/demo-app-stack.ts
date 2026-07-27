@@ -890,6 +890,13 @@ exports.handler = async (event) => {
       resources: ['*'], // Required: DescribeDBClusters does not support resource-level permissions
     }));
 
+    // Grant Lambda permission to list secrets (needed to discover OpenEMR DB secret at runtime).
+    // secretsmanager:ListSecrets requires Resource: '*' by API design.
+    dataLoaderLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['secretsmanager:ListSecrets'],
+      resources: ['*'], // Required: ListSecrets does not support resource-level permissions
+    }));
+
     // Grant Lambda access to read Synthea bundles from S3
     this.outputBucket.grantRead(dataLoaderLambda);
     this.outputBucketKey.grantDecrypt(dataLoaderLambda);
