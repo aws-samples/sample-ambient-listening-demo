@@ -432,8 +432,13 @@ export class DemoAppStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream', 'bedrock:ApplyGuardrail'],
       resources: [
-        `arn:aws:bedrock:${cdk.Aws.REGION}::foundation-model/amazon.nova-lite-v1:0`,
+        // Foundation model ARNs for all regions in the cross-region inference profile
+        `arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-lite-v1:0`,
+        `arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-lite-v1:0`,
+        // Cross-region inference profile ARN
         `arn:aws:bedrock:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:inference-profile/us.amazon.nova-lite-v1:0`,
+        // Guardrail ARN for content filtering
         `arn:aws:bedrock:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:guardrail/*`,
       ],
     }));
