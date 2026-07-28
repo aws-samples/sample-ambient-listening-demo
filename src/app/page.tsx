@@ -188,10 +188,9 @@ function AmbientDocumentationContent() {
       // Connect to WebSocket server via ALB (/ws path routes to port 3001)
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-      console.log('[Ambient] Connecting WebSocket:', wsUrl);
 
       const ws = new WebSocket(wsUrl);
-      (window as any).__ambientWs = ws; // Store for cleanup
+      (window as any).__ambientWs = ws;
 
       ws.onerror = (err) => {
         console.error('[Ambient] WebSocket error:', err);
@@ -201,34 +200,28 @@ function AmbientDocumentationContent() {
         console.log('[Ambient] WebSocket closed');
       };
 
-      // Use default AudioContext — createMediaStreamSource always uses hardware rate (48kHz)
+      // Use default AudioContext
       const audioContext = new AudioContext();
       audioContextRef.current = audioContext;
-      console.log('[Ambient] AudioContext sample rate:', audioContext.sampleRate);
+      const actualSampleRate = audioContext.sampleRate;
 
       const source = audioContext.createMediaStreamSource(stream);
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
       ws.onopen = () => {
-        console.log('[Ambient] WebSocket connected, sending start message');
-        const actualSampleRate = audioContext.sampleRate;
-        console.log('[Ambient] Native sample rate:', actualSampleRate);
         ws.send(JSON.stringify({
           type: 'start',
           sessionId: session?.sessionId,
           domainId: session?.domainId,
           subscriptionId: session?.subscriptionId,
-          sampleRate: actualSampleRate,
+          sampleRate: 16000, // Downsample to 16kHz to match WAV file format
         }));
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'ready') {
-            console.log('[Ambient] Server stream ready — silence padding complete, recording live');
-          }
           if (msg.type === 'transcript' && msg.content && !msg.isPartial) {
             addTranscript({
               id: msg.id,
@@ -243,18 +236,20 @@ function AmbientDocumentationContent() {
         } catch { /* ignore */ }
       };
 
+      // Downsample from native rate (48kHz) to 16kHz before sending
+      const downsampleRatio = Math.round(actualSampleRate / 16000);
+
       processor.onaudioprocess = (e) => {
         if (ws.readyState !== WebSocket.OPEN) return;
 
         const inputData = e.inputBuffer.getChannelData(0);
-        // Convert Float32 to Int16 PCM
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i] ?? 0));
+        // Downsample and convert Float32 to Int16 PCM
+        const outputLength = Math.floor(inputData.length / downsampleRatio);
+        const pcm16 = new Int16Array(outputLength);
+        for (let i = 0; i < outputLength; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i * downsampleRatio] ?? 0));
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
-
-        // Send audio directly — server buffers until Connect Health is ready
         ws.send(pcm16.buffer);
       };
 

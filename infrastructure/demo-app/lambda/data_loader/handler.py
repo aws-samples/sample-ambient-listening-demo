@@ -720,6 +720,17 @@ def handler(event, context):
             print("No Synthea bundles found in S3")
             cursor.close()
             connection.close()
+
+            # Register OAuth client even when no Synthea data exists
+            try:
+                conn2 = get_db_connection(credentials)
+                cur2 = conn2.cursor()
+                register_oauth_client(cur2, conn2)
+                cur2.close()
+                conn2.close()
+            except Exception as oauth_err:
+                print(f"WARNING: OAuth client registration failed: {oauth_err}")
+
             return send_response(event, context, 'SUCCESS', {
                 'Message': 'No Synthea bundles found in S3',
                 'PatientCount': '1'  # Margaret Smith

@@ -101,7 +101,7 @@ async function startConnectHealthStream(ws, session, audioQueue, isEnded, setRes
   const client = new ConnectHealthClient({ region });
 
   // Generate silence padding: 5 seconds of zero-valued PCM at the session's sample rate.
-  // This gives Connect Health time to warm up its transcription engine before real speech arrives.
+  // This gives Connect Health time to initialize before real speech arrives.
   const sampleRate = session.sampleRate || 48000;
   const SILENCE_DURATION_SEC = 5;
   const SILENCE_CHUNK_SIZE = 4096; // samples per chunk (matches client's ScriptProcessorNode buffer)
@@ -128,18 +128,28 @@ async function startConnectHealthStream(ws, session, audioQueue, isEnded, setRes
         },
       };
 
-      // 2. Silence padding — warm up the transcription engine
+      // 2. Silence padding — warm up the transcription engine (stereo: 2 channels)
       console.log(`[WS] Sending ${SILENCE_DURATION_SEC}s silence padding (${silenceChunksCount} chunks)`);
       for (let i = 0; i < silenceChunksCount; i++) {
-        const silenceBuffer = Buffer.alloc(SILENCE_CHUNK_SIZE * 2); // 2 bytes per Int16 sample
+        const silenceBuffer = Buffer.alloc(SILENCE_CHUNK_SIZE * 4); // 4 bytes per frame (2 channels × 2 bytes per Int16 sample)
         yield { audioEvent: { audioChunk: silenceBuffer } };
       }
-      console.log(`[WS] Silence padding complete, draining audio queue (${audioQueue.length} chunks buffered)`);
+      console.log(`[WS] Silence padding complete, streaming live audio (${audioQueue.length} chunks buffered)`);
 
-      // 3. Real audio chunks from the client
+      // 3. Real audio chunks from the client (mono → interleaved stereo)
       while (true) {
         while (audioQueue.length > 0) {
-          yield { audioEvent: { audioChunk: audioQueue.shift() } };
+          const monoChunk = audioQueue.shift();
+          // Duplicate mono to stereo (interleave L=R for 2-channel requirement)
+          const stereoChunk = Buffer.alloc(monoChunk.length * 2);
+          for (let i = 0; i < monoChunk.length; i += 2) {
+            // Copy each 16-bit sample to both left and right channels
+            stereoChunk[i * 2] = monoChunk[i];
+            stereoChunk[i * 2 + 1] = monoChunk[i + 1];
+            stereoChunk[i * 2 + 2] = monoChunk[i];
+            stereoChunk[i * 2 + 3] = monoChunk[i + 1];
+          }
+          yield { audioEvent: { audioChunk: stereoChunk } };
         }
         if (isEnded()) break;
         await new Promise(resolve => setResolve(resolve));
@@ -165,7 +175,7 @@ async function startConnectHealthStream(ws, session, audioQueue, isEnded, setRes
   const response = await client.send(command);
   console.log(`[WS] Stream connected`);
 
-  // Notify client that stream is ready — client will flush buffered audio
+  // Notify client that stream is ready
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ready' }));
 
   if (response.responseStream) {

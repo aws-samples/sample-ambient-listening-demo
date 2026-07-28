@@ -70,6 +70,13 @@ export function ClinicalNotePanel({
     }
   }, [clinicalNote]);
 
+  // Reset submission state when a new session begins so the button is re-enabled
+  useEffect(() => {
+    if (!sessionEnded) {
+      setSubmissionState({ status: 'idle' });
+    }
+  }, [sessionEnded]);
+
   const isEditingEnabled = sessionEnded && !!clinicalNote && submissionState.status !== 'success';
   const isSubmitEnabled =
     isEditingEnabled &&
