@@ -1,0 +1,25 @@
+﻿Estimate summary
+Upfront cost,Monthly cost,Total 12 months cost,Currency
+0,5168.57,62022.84,USD
+,,* Includes upfront cost
+
+
+Detailed Estimate
+Group hierarchy,Region,Description,Service,Upfront,Monthly,First 12 months total,Currency,Status,Configuration summary
+My Estimate,US East (N. Virginia),,AWS Fargate,0,115.34,1384.08,USD,,"Operating system (Linux), CPU Architecture (ARM), Average duration (730 hours), Number of tasks or pods (2 per month), Amount of ephemeral storage allocated for Amazon ECS (20 GB), Amount of memory allocated (4 GB)"
+My Estimate,US East (N. Virginia),1 ALB for ECS fargate,Application Load Balancer,0,18.77,225.24,USD,,Number of Application Load Balancers (1)
+My Estimate,US East (N. Virginia),2 NAT Gateways 5GB Per mont,Network Address Translation (NAT) Gateway,0,65.93,791.16,USD,,"Number of Regional NAT Gateways (1), Number of Availability Zones Regional NAT Gateways is active in (2), Number of NAT Gateways (0)"
+My Estimate,US East (N. Virginia),,S3 Standard,0,0.3,3.60,USD,,"S3 Standard storage (10 GB per month), PUT, COPY, POST, LIST requests to S3 Standard (10000), GET, SELECT, and all other requests from S3 Standard (50000)"
+My Estimate,US East (N. Virginia),,Data Transfer,0,0,0.00,USD,,
+My Estimate,US East (N. Virginia),,AWS Key Management Service,0,2.3,27.60,USD,,"Number of customer managed Customer Master Keys (CMK) (2), Number of symmetric requests (100000)"
+My Estimate,US East (N. Virginia),,AWS Web Application Firewall (WAF),0,10.3,123.60,USD,,"Number of Web Access Control Lists (Web ACLs) utilized (1 per month), Number of Rules added per Web ACL (5 per month)"
+My Estimate,US East (N. Virginia),,Amazon CloudWatch,0,2.5225,30.27,USD,,"Number of mobile OTEL events and spans or spans per visit (70), Mobile sampling rate (1), Standard Logs: Data Ingested (5 GB)"
+My Estimate,US East (N. Virginia),,AWS Secrets Manager,0,1.25,15.00,USD,,"Number of secrets (3), Average duration of each secret (30 days), Number of API calls (10000 per month)"
+My Estimate,US East (N. Virginia),,Amazon,0,0.432,5.18,USD,,"Select your inference route (Geo Cross Region Inference), Select your inference type (On Demand - Standard), Average requests per minute (1), Hours per day at this rate (1), Average input tokens per request (2000), Average output tokens per request (500)"
+My Estimate,US East (N. Virginia),,AWS Data Transfer,0,0.9,10.80,USD,,"DT Inbound: Internet (10 GB per month), DT Outbound: Internet (10 GB per month), DT Intra-Region: (0 TB per month), Data transfer cost (0.9)"
+My Estimate,US East (N. Virginia),"Amazon Connect Health: 25 users x $99 = $2,475 (or 50 users x $99 = $4,950)",Amazon EC2 ,0,4950.533,59406.40,USD,,"Tenancy (Shared Instances), Operating system (Linux), Workload (Consistent, Number of instances: 1), Advance EC2 instance (t4g.nano), Pricing strategy (Compute Savings Plans 3yr  No Upfront), Enable monitoring (disabled), DT Inbound: Not selected (0 TB per month), DT Outbound: Not selected (0 TB per month), DT Intra-Region: (0 TB per month)"
+
+
+
+Acknowledgement
+"* AWS Pricing Calculator provides only an estimate of your AWS fees and doesn't include any taxes that might apply. Your actual fees depend on a variety of factors, including your actual usage of AWS services."
