@@ -1,4 +1,4 @@
-# Amazon Connect Health — Ambient Clinical Documentation Demo
+# \Ambient Clinical Documentation Demo
 
 > **Disclaimer**: This sample is provided for demonstration and educational purposes only and is not intended for production use without additional security review and testing. The code has not undergone a formal AppSec review. Before deploying in a production environment, conduct a thorough security assessment, enable all recommended guardrails, and ensure compliance with your organization's security requirements.
 
