@@ -1,0 +1,6 @@
+# These findings are from deleted utility scripts that contained OpenEMR DB secret ARNs
+# (not actual passwords/keys). The secrets are AWS Secrets Manager ARNs which are
+# now passed via environment variables. The scripts were removed in commit 4c737d4.
+2c41981ba2f40ffc118064ff07fb2b5e05e2dbd7:scripts/delete-encounters-ecs.js:generic-api-key:10
+2c41981ba2f40ffc118064ff07fb2b5e05e2dbd7:scripts/fix-encounters.js:generic-api-key:7
+2c41981ba2f40ffc118064ff07fb2b5e05e2dbd7:scripts/register-oauth.js:generic-api-key:10

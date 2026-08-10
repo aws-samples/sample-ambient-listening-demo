@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# CDK output
+cdk.out/
+
+# TypeScript build output
+*.js
+*.d.ts
+*.js.map
+
+# Keep source files
+!bin/*.ts
+!lib/*.ts
+!jest.config.js

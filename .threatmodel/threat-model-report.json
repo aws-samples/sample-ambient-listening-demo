@@ -1,0 +1,524 @@
+{
+  "schema": 1,
+  "applicationInfo": {
+    "name": "Threat Model Export",
+    "description": ""
+  },
+  "architecture": {
+    "description": ""
+  },
+  "dataflow": {
+    "description": ""
+  },
+  "assumptions": [
+    {
+      "id": "A001",
+      "numericId": 1,
+      "content": "Authorization scoping (HIPAA minimum necessary) is not enforced at application level - all authenticated clinicians can access all patients",
+      "displayOrder": 1,
+      "metadata": []
+    },
+    {
+      "id": "A002",
+      "numericId": 2,
+      "content": "No formal audit trail for clinical note modifications beyond CloudWatch logs",
+      "displayOrder": 2,
+      "metadata": []
+    },
+    {
+      "id": "A003",
+      "numericId": 3,
+      "content": "WebSocket connection flooding has limited mitigation beyond WAF rate limiting",
+      "displayOrder": 3,
+      "metadata": []
+    },
+    {
+      "id": "A004",
+      "numericId": 4,
+      "content": "AI-generated clinical notes may contain inaccuracies (hallucination risk) mitigated by human review but not eliminated",
+      "displayOrder": 4,
+      "metadata": []
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "3b4040df-8d1f-4907-af58-a15145293e9b",
+      "numericId": 1,
+      "status": "mitigationResolved",
+      "content": "Cognito User Pool with OAuth2 integration at ALB level. All requests authenticated before reaching application.",
+      "displayOrder": 1,
+      "metadata": []
+    },
+    {
+      "id": "320f5c09-6de4-4c16-826d-eaa8bd035845",
+      "numericId": 2,
+      "status": "mitigationResolved",
+      "content": "AWS WAF WebACL with rate limiting, IP allowlist, and managed rule groups attached to ALB.",
+      "displayOrder": 2,
+      "metadata": []
+    },
+    {
+      "id": "40d3f621-5f6a-45fd-8251-3545e3cb5570",
+      "numericId": 3,
+      "status": "mitigationResolved",
+      "content": "TLS 1.2+ encryption on all connections. ALB terminates HTTPS, Aurora uses RDS CA bundle for TLS verification.",
+      "displayOrder": 3,
+      "metadata": []
+    },
+    {
+      "id": "e788797c-ef2b-4069-818d-45f9bf06d1d2",
+      "numericId": 4,
+      "status": "mitigationResolved",
+      "content": "KMS encryption at rest for S3 output bucket, Aurora database, Secrets Manager secrets, and CloudWatch Logs.",
+      "displayOrder": 4,
+      "metadata": []
+    },
+    {
+      "id": "14821640-02fb-4a33-a31a-25bc7fd9ff4e",
+      "numericId": 5,
+      "status": "mitigationResolved",
+      "content": "Least-privilege IAM policies scoped to specific resource ARNs. No wildcard actions except where APIs require it.",
+      "displayOrder": 5,
+      "metadata": []
+    },
+    {
+      "id": "4c6e118e-6a31-4a92-9050-c2205bcbce79",
+      "numericId": 6,
+      "status": "mitigationResolved",
+      "content": "Secrets Manager for all credentials with no plain-text environment variables. ECS references via secrets property.",
+      "displayOrder": 6,
+      "metadata": []
+    },
+    {
+      "id": "c66183f9-ff82-405e-a3c6-a1b661c1d977",
+      "numericId": 7,
+      "status": "mitigationResolved",
+      "content": "Parameterized SQL queries for all database operations preventing SQL injection.",
+      "displayOrder": 7,
+      "metadata": []
+    },
+    {
+      "id": "9194ef4d-68e0-4802-b122-81542e3baf1e",
+      "numericId": 8,
+      "status": "mitigationResolved",
+      "content": "PHI-sanitized logging - only error names/types logged, never clinical content or patient data.",
+      "displayOrder": 8,
+      "metadata": []
+    },
+    {
+      "id": "5a35727e-c516-43df-add5-e72c316a8a80",
+      "numericId": 9,
+      "status": "mitigationResolved",
+      "content": "Private subnets with security groups restricting database access to ECS tasks only.",
+      "displayOrder": 9,
+      "metadata": []
+    },
+    {
+      "id": "bfb06ccc-192b-4070-b97e-be096bcf553f",
+      "numericId": 10,
+      "status": "mitigationResolved",
+      "content": "Human-in-the-loop validation for AI-generated clinical notes before EHR submission.",
+      "displayOrder": 10,
+      "metadata": []
+    },
+    {
+      "id": "80fe59e7-9825-40f3-bc6c-813726e69162",
+      "numericId": 11,
+      "status": "mitigationInProgress",
+      "content": "Amazon Bedrock Guardrails for content filtering on AI model invocations.",
+      "displayOrder": 11,
+      "metadata": []
+    },
+    {
+      "id": "9460da41-650c-4cc5-9ef4-f0fd6624d872",
+      "numericId": 12,
+      "status": "mitigationResolved",
+      "content": "Pinned dependency versions in package.json and package-lock.json to prevent supply chain attacks.",
+      "displayOrder": 12,
+      "metadata": []
+    },
+    {
+      "id": "a5ed3a5f-9d91-4bb2-8515-923aef71af83",
+      "numericId": 13,
+      "status": "mitigationInProgress",
+      "content": "CloudTrail and CloudWatch monitoring for security-relevant API calls and anomalous behavior.",
+      "displayOrder": 13,
+      "metadata": []
+    },
+    {
+      "id": "d818e857-63e4-4489-8caa-e7b997b8d273",
+      "numericId": 14,
+      "status": "mitigationResolved",
+      "content": "S3 bucket policies blocking public access and restricting writes to Connect Health service principal only.",
+      "displayOrder": 14,
+      "metadata": []
+    }
+  ],
+  "assumptionLinks": [],
+  "mitigationLinks": [
+    {
+      "linkedId": "85372ae3-45e3-4a0c-bd99-27fd9b3fb4cd",
+      "mitigationId": "3b4040df-8d1f-4907-af58-a15145293e9b"
+    },
+    {
+      "linkedId": "a6168cf9-2aa5-4ed0-aa36-b105f7e4c791",
+      "mitigationId": "3b4040df-8d1f-4907-af58-a15145293e9b"
+    },
+    {
+      "linkedId": "8cf71513-829d-40ab-9e3b-09a61b4f58d4",
+      "mitigationId": "320f5c09-6de4-4c16-826d-eaa8bd035845"
+    },
+    {
+      "linkedId": "3a43a6f0-8ca2-4865-ac25-0e1dcf6074c4",
+      "mitigationId": "320f5c09-6de4-4c16-826d-eaa8bd035845"
+    },
+    {
+      "linkedId": "b82bc8b9-e1a3-4ea2-8151-7805db8f8083",
+      "mitigationId": "40d3f621-5f6a-45fd-8251-3545e3cb5570"
+    },
+    {
+      "linkedId": "0b12a6e2-7915-4c26-97ba-7209a8f99b10",
+      "mitigationId": "e788797c-ef2b-4069-818d-45f9bf06d1d2"
+    },
+    {
+      "linkedId": "cc01ee5d-bd63-4895-b8d0-8ab3a3c40581",
+      "mitigationId": "e788797c-ef2b-4069-818d-45f9bf06d1d2"
+    },
+    {
+      "linkedId": "90be97a9-e023-4752-bae7-4563d2b807de",
+      "mitigationId": "14821640-02fb-4a33-a31a-25bc7fd9ff4e"
+    },
+    {
+      "linkedId": "7c4351ca-d635-46d3-b6aa-3f883a4b638e",
+      "mitigationId": "14821640-02fb-4a33-a31a-25bc7fd9ff4e"
+    },
+    {
+      "linkedId": "cc01ee5d-bd63-4895-b8d0-8ab3a3c40581",
+      "mitigationId": "4c6e118e-6a31-4a92-9050-c2205bcbce79"
+    },
+    {
+      "linkedId": "c2a8043e-1df8-49dc-9324-d83a50ab6f66",
+      "mitigationId": "c66183f9-ff82-405e-a3c6-a1b661c1d977"
+    },
+    {
+      "linkedId": "0442c23f-e1b2-4d88-91f9-b3b8d1ef17d3",
+      "mitigationId": "9194ef4d-68e0-4802-b122-81542e3baf1e"
+    },
+    {
+      "linkedId": "0b12a6e2-7915-4c26-97ba-7209a8f99b10",
+      "mitigationId": "5a35727e-c516-43df-add5-e72c316a8a80"
+    },
+    {
+      "linkedId": "ca563876-6970-402a-8aef-4bec169db660",
+      "mitigationId": "bfb06ccc-192b-4070-b97e-be096bcf553f"
+    },
+    {
+      "linkedId": "ca563876-6970-402a-8aef-4bec169db660",
+      "mitigationId": "80fe59e7-9825-40f3-bc6c-813726e69162"
+    },
+    {
+      "linkedId": "14622e3f-7de8-4481-bbdb-a9946284bae9",
+      "mitigationId": "9460da41-650c-4cc5-9ef4-f0fd6624d872"
+    },
+    {
+      "linkedId": "135402e9-af41-47fe-8823-b0cb7e9b5f0a",
+      "mitigationId": "a5ed3a5f-9d91-4bb2-8515-923aef71af83"
+    },
+    {
+      "linkedId": "0b12a6e2-7915-4c26-97ba-7209a8f99b10",
+      "mitigationId": "d818e857-63e4-4489-8caa-e7b997b8d273"
+    }
+  ],
+  "threats": [
+    {
+      "id": "85372ae3-45e3-4a0c-bd99-27fd9b3fb4cd",
+      "numericId": 1,
+      "threatSource": "External attacker",
+      "prerequisites": "with network access to the ALB endpoint",
+      "threatAction": "bypass Cognito authentication via token forgery or session hijacking",
+      "threatImpact": "unauthorized access to clinical data and patient PHI",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A007"
+      ],
+      "statement": "A External attacker with network access to the ALB endpoint can bypass Cognito authentication via token forgery or session hijacking, which leads to unauthorized access to clinical data and patient PHI",
+      "displayOrder": 1,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-S",
+        "Authentication"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "a6168cf9-2aa5-4ed0-aa36-b105f7e4c791",
+      "numericId": 2,
+      "threatSource": "Malicious insider or compromised clinician account",
+      "prerequisites": "with valid Cognito credentials",
+      "threatAction": "access patient records beyond their authorized scope",
+      "threatImpact": "unauthorized PHI disclosure violating HIPAA minimum necessary",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A004",
+        "A003"
+      ],
+      "statement": "A Malicious insider or compromised clinician account with valid Cognito credentials can access patient records beyond their authorized scope, which leads to unauthorized PHI disclosure violating HIPAA minimum necessary",
+      "displayOrder": 2,
+      "status": "threatIdentified",
+      "tags": [
+        "STRIDE-S",
+        "Authorization"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "b82bc8b9-e1a3-4ea2-8151-7805db8f8083",
+      "numericId": 3,
+      "threatSource": "Attacker with network position",
+      "prerequisites": "on path between browser and ALB",
+      "threatAction": "intercept audio stream or clinical note data in transit",
+      "threatImpact": "exposure of PHI from patient encounters",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A001",
+        "A003"
+      ],
+      "statement": "A Attacker with network position on path between browser and ALB can intercept audio stream or clinical note data in transit, which leads to exposure of PHI from patient encounters",
+      "displayOrder": 3,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-T",
+        "Network"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "c2a8043e-1df8-49dc-9324-d83a50ab6f66",
+      "numericId": 4,
+      "threatSource": "Privileged user or attacker",
+      "prerequisites": "with database access",
+      "threatAction": "modify clinical notes in Aurora after clinician approval",
+      "threatImpact": "integrity of medical record compromised, patient safety risk",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A003",
+        "A004"
+      ],
+      "statement": "A Privileged user or attacker with database access can modify clinical notes in Aurora after clinician approval, which leads to integrity of medical record compromised, patient safety risk",
+      "displayOrder": 4,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-T",
+        "Data Integrity"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "135402e9-af41-47fe-8823-b0cb7e9b5f0a",
+      "numericId": 5,
+      "threatSource": "Malicious actor",
+      "prerequisites": "who has compromised the ECS task or credentials",
+      "threatAction": "deny responsibility for clinical note modifications",
+      "threatImpact": "inability to audit who modified patient records",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A003"
+      ],
+      "statement": "A Malicious actor who has compromised the ECS task or credentials can deny responsibility for clinical note modifications, which leads to inability to audit who modified patient records",
+      "displayOrder": 5,
+      "status": "threatIdentified",
+      "tags": [
+        "STRIDE-R",
+        "Audit"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "0b12a6e2-7915-4c26-97ba-7209a8f99b10",
+      "numericId": 6,
+      "threatSource": "External attacker or insider",
+      "prerequisites": "with access to S3 bucket or database",
+      "threatAction": "exfiltrate clinical transcripts and SOAP notes containing PHI",
+      "threatImpact": "large-scale PHI breach requiring HIPAA notification",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A002",
+        "A003",
+        "A004"
+      ],
+      "statement": "A External attacker or insider with access to S3 bucket or database can exfiltrate clinical transcripts and SOAP notes containing PHI, which leads to large-scale PHI breach requiring HIPAA notification",
+      "displayOrder": 6,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-I",
+        "Data Breach"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "0442c23f-e1b2-4d88-91f9-b3b8d1ef17d3",
+      "numericId": 7,
+      "threatSource": "Attacker",
+      "prerequisites": "who gains access to CloudWatch Logs",
+      "threatAction": "extract PHI from application log entries",
+      "threatImpact": "PHI exposure through operational logs",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A003",
+        "A004"
+      ],
+      "statement": "A Attacker who gains access to CloudWatch Logs can extract PHI from application log entries, which leads to PHI exposure through operational logs",
+      "displayOrder": 7,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-I",
+        "Logging"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "8cf71513-829d-40ab-9e3b-09a61b4f58d4",
+      "numericId": 8,
+      "threatSource": "External attacker",
+      "prerequisites": "with internet access to ALB",
+      "threatAction": "launch DDoS or resource exhaustion against the application",
+      "threatImpact": "clinical workflow disruption during patient encounters",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A001"
+      ],
+      "statement": "A External attacker with internet access to ALB can launch DDoS or resource exhaustion against the application, which leads to clinical workflow disruption during patient encounters",
+      "displayOrder": 8,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-D",
+        "Availability"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "3a43a6f0-8ca2-4865-ac25-0e1dcf6074c4",
+      "numericId": 9,
+      "threatSource": "Automated scanner or attacker",
+      "prerequisites": "targeting exposed WebSocket endpoint",
+      "threatAction": "flood WebSocket connections exhausting ECS task resources",
+      "threatImpact": "active audio streaming sessions interrupted mid-encounter",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A001"
+      ],
+      "statement": "A Automated scanner or attacker targeting exposed WebSocket endpoint can flood WebSocket connections exhausting ECS task resources, which leads to active audio streaming sessions interrupted mid-encounter",
+      "displayOrder": 9,
+      "status": "threatIdentified",
+      "tags": [
+        "STRIDE-D",
+        "WebSocket"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "90be97a9-e023-4752-bae7-4563d2b807de",
+      "numericId": 10,
+      "threatSource": "Compromised or misconfigured IAM policy",
+      "prerequisites": "with overly broad permissions",
+      "threatAction": "escalate privileges to access resources beyond intended scope",
+      "threatImpact": "unauthorized access to KMS keys, secrets, or other accounts",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A005",
+        "A006"
+      ],
+      "statement": "A Compromised or misconfigured IAM policy with overly broad permissions can escalate privileges to access resources beyond intended scope, which leads to unauthorized access to KMS keys, secrets, or other accounts",
+      "displayOrder": 10,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-E",
+        "IAM"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "7c4351ca-d635-46d3-b6aa-3f883a4b638e",
+      "numericId": 11,
+      "threatSource": "Attacker",
+      "prerequisites": "who compromises ECS task role credentials",
+      "threatAction": "invoke Connect Health or Bedrock APIs with stolen credentials",
+      "threatImpact": "unauthorized use of AI services, potential data exfiltration",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A006"
+      ],
+      "statement": "A Attacker who compromises ECS task role credentials can invoke Connect Health or Bedrock APIs with stolen credentials, which leads to unauthorized use of AI services, potential data exfiltration",
+      "displayOrder": 11,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-E",
+        "Credential Theft"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "ca563876-6970-402a-8aef-4bec169db660",
+      "numericId": 12,
+      "threatSource": "AI model (Bedrock or Connect Health)",
+      "prerequisites": "processing patient encounter data",
+      "threatAction": "generate inaccurate clinical notes or hallucinated content",
+      "threatImpact": "incorrect medical documentation leading to patient harm",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A003"
+      ],
+      "statement": "A AI model (Bedrock or Connect Health) processing patient encounter data can generate inaccurate clinical notes or hallucinated content, which leads to incorrect medical documentation leading to patient harm",
+      "displayOrder": 12,
+      "status": "threatIdentified",
+      "tags": [
+        "STRIDE-T",
+        "AI Safety",
+        "Responsible AI"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "cc01ee5d-bd63-4895-b8d0-8ab3a3c40581",
+      "numericId": 13,
+      "threatSource": "Attacker or misconfiguration",
+      "prerequisites": "with access to Secrets Manager secret ARN",
+      "threatAction": "retrieve plaintext database or FHIR API credentials",
+      "threatImpact": "full database access enabling mass PHI exfiltration",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A005"
+      ],
+      "statement": "A Attacker or misconfiguration with access to Secrets Manager secret ARN can retrieve plaintext database or FHIR API credentials, which leads to full database access enabling mass PHI exfiltration",
+      "displayOrder": 13,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-I",
+        "Secrets"
+      ],
+      "metadata": []
+    },
+    {
+      "id": "14622e3f-7de8-4481-bbdb-a9946284bae9",
+      "numericId": 14,
+      "threatSource": "Supply chain attacker",
+      "prerequisites": "who compromises npm dependency",
+      "threatAction": "inject malicious code into application via compromised package",
+      "threatImpact": "remote code execution in ECS task with access to all PHI",
+      "impactedGoal": [],
+      "impactedAssets": [
+        "A001",
+        "A003",
+        "A005"
+      ],
+      "statement": "A Supply chain attacker who compromises npm dependency can inject malicious code into application via compromised package, which leads to remote code execution in ECS task with access to all PHI",
+      "displayOrder": 14,
+      "status": "threatResolved",
+      "tags": [
+        "STRIDE-T",
+        "Supply Chain"
+      ],
+      "metadata": []
+    }
+  ]
+}

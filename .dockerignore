@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitmodules
+infrastructure
+.kiro
+.vscode
+.env*
+aws_creds.sh
+coverage
+*.md
+!README.md
