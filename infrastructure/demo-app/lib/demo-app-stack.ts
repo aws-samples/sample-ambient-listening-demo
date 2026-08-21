@@ -625,10 +625,12 @@ export class DemoAppStack extends cdk.Stack {
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
 
-    // Cognito hosted UI domain
+    // Cognito hosted UI domain.
+    // The domain prefix must be globally unique across all AWS accounts, so we append
+    // the account ID to avoid collisions with other deployments of this sample.
     const cognitoDomain = userPool.addDomain('DemoAppCognitoDomain', {
       cognitoDomain: {
-        domainPrefix: `${id.toLowerCase()}-auth`,
+        domainPrefix: `${id.toLowerCase()}-auth-${cdk.Aws.ACCOUNT_ID}`,
       },
     });
 
