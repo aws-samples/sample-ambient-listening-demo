@@ -293,11 +293,17 @@ function AmbientDocumentationContent() {
   }, []);
 
   const handleNewSession = useCallback(() => {
+    // Fully tear down any in-flight audio/streaming before clearing state, so a
+    // discard mid-session (note generated but not submitted) leaves nothing running.
+    stopMicrophoneStreaming();
     reset();
     setSelectedPatient(null);
     setPatientContext(null);
     setHighlightedSegmentId(null);
     setIsStreaming(false);
+    setAudioSource('microphone');
+    setWavFile(null);
+    setActiveTab('clinical-note');
   }, [reset]);
 
   const handlePatientSelect = useCallback((patient: Patient) => {
@@ -444,6 +450,7 @@ function AmbientDocumentationContent() {
                 patientName={selectedPatient?.name ?? null}
                 sessionEnded={session?.status === 'ended'}
                 onNewSession={handleNewSession}
+                onReset={handleNewSession}
               />
             </div>
             <div

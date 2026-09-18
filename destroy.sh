@@ -14,23 +14,28 @@ set -euo pipefail
 
 REGION="us-east-1"
 DOMAIN=""
+SELF_SIGNED=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --domain) DOMAIN="$2"; shift 2 ;;
     --region) REGION="$2"; shift 2 ;;
+    --self-signed) SELF_SIGNED=true; shift ;;
     -h|--help)
-      echo "Usage: ./destroy.sh --domain <route53-domain> [--region REGION]"
+      echo "Usage:"
+      echo "  Route53 mode:     ./destroy.sh --domain <route53-domain> [--region REGION]"
+      echo "  Self-signed mode: ./destroy.sh --self-signed [--region REGION]"
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
 
-if [[ -z "$DOMAIN" ]]; then
-  echo "ERROR: --domain is required"
+if [[ "$SELF_SIGNED" != "true" && -z "$DOMAIN" ]]; then
+  echo "ERROR: --domain is required (or pass --self-signed for a self-signed deployment)"
   echo "Usage: ./destroy.sh --domain <route53-domain> [--region REGION]"
+  echo "       ./destroy.sh --self-signed [--region REGION]"
   exit 1
 fi
 
@@ -108,11 +113,17 @@ log "Destroying both stacks in parallel..."
 # Start Demo App CDK destroy in background
 (
   cd "$SCRIPT_DIR/infrastructure/demo-app"
+  # Self-signed deployments were created without a domain context, so omit it here
+  # (passing a domain would trigger a Route53 HostedZone lookup during synth).
+  DEMO_DOMAIN_CONTEXT=""
+  if [[ "$SELF_SIGNED" != "true" ]]; then
+    DEMO_DOMAIN_CONTEXT="--context domain=ambient.${DOMAIN}"
+  fi
   cdk destroy --force --region "$REGION" \
     --context "allowedCidr=0.0.0.0/32" \
     --context "openemrStackName=OpenEmrStack" \
     --context "certificateArn=arn:aws:acm:us-east-1:000000000000:certificate/dummy" \
-    --context "domain=ambient.${DOMAIN}" \
+    $DEMO_DOMAIN_CONTEXT \
     >/dev/null 2>&1
   # If CDK destroy failed (S3 race — ALB writes logs during teardown), empty and retry
   if aws cloudformation describe-stacks --stack-name DemoAppStack --region "$REGION" --query 'Stacks[0].StackStatus' --output text 2>/dev/null | grep -q "FAILED"; then
@@ -138,9 +149,13 @@ DEMO_PID=$!
   fi
   source .venv/bin/activate
   pip install -r requirements.txt --quiet 2>/dev/null || true
+  OPENEMR_ROUTE53_CONTEXT=""
+  if [[ "$SELF_SIGNED" != "true" ]]; then
+    OPENEMR_ROUTE53_CONTEXT="--context route53_domain=${DOMAIN}"
+  fi
   cdk destroy --force \
     --context "certificate_arn=arn:aws:acm:us-east-1:000000000000:certificate/dummy-for-destroy" \
-    --context "route53_domain=${DOMAIN}" \
+    $OPENEMR_ROUTE53_CONTEXT \
     --context "security_group_ip_range_ipv4=127.0.0.1/32" \
     --context "activate_openemr_apis=true" \
     --context "rds_deletion_protection=false" \
@@ -182,6 +197,9 @@ ok "SSM parameters cleaned up"
 
 # ─── Clean Up Route53 A Records ──────────────────────────────────────────────
 
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  log "Self-signed mode: no Route53 A records to clean up"
+else
 log "Cleaning up Route53 A records..."
 HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
   --dns-name "$DOMAIN" \
@@ -210,10 +228,47 @@ if [[ -n "$HOSTED_ZONE_ID" && "$HOSTED_ZONE_ID" != "None" ]]; then
   done
 fi
 
+fi  # end Route53 A record cleanup (skipped in self-signed mode)
+
 # ─── Clean Up ACM Certificate ────────────────────────────────────────────────
 
-WILDCARD_DOMAIN="*.${DOMAIN}"
 log "Checking for ACM certificate to clean up..."
+
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  # Destroy CertStack first — its custom resource deletes the imported cert cleanly.
+  # (Runs after the app/OpenEMR stacks are gone, so the cert is no longer in use.)
+  log "Destroying CertStack (removes the in-cloud self-signed certificate)..."
+  (
+    cd "$SCRIPT_DIR/infrastructure/demo-app"
+    npm ci --quiet 2>/dev/null || true
+    cdk destroy CertStack --force --context selfSignedCert=true --region "$REGION" >/dev/null 2>&1
+  ) && ok "CertStack destroyed" || warn "CertStack destroy may have had issues (will fall back to direct cert cleanup)"
+  aws ssm delete-parameter --name "/AmbientDemo/SelfSignedCertArn" --region "$REGION" 2>/dev/null || true
+
+  # Fallback: delete any imported certs no longer in use (covers orphans/older runs).
+  IMPORTED_CERTS=$(aws acm list-certificates \
+    --region "$REGION" \
+    --certificate-statuses ISSUED \
+    --query "CertificateSummaryList[?Type=='IMPORTED'].CertificateArn" \
+    --output text 2>/dev/null) || true
+
+  DELETED_ANY=false
+  for CERT_ARN in $IMPORTED_CERTS; do
+    [[ -z "$CERT_ARN" || "$CERT_ARN" == "None" ]] && continue
+    IN_USE=$(aws acm describe-certificate \
+      --certificate-arn "$CERT_ARN" \
+      --region "$REGION" \
+      --query 'Certificate.InUseBy' \
+      --output text 2>/dev/null) || true
+    if [[ -z "$IN_USE" || "$IN_USE" == "None" ]]; then
+      aws acm delete-certificate --certificate-arn "$CERT_ARN" --region "$REGION" 2>/dev/null \
+        && { ok "Imported self-signed certificate deleted: $CERT_ARN"; DELETED_ANY=true; } || true
+    fi
+  done
+  [[ "$DELETED_ANY" == "false" ]] && warn "No unused imported certificate found to delete (a cert may still be in use, or was already removed). Review ACM manually if needed."
+else
+
+WILDCARD_DOMAIN="*.${DOMAIN}"
 
 CERT_ARN=$(aws acm list-certificates \
   --region "$REGION" \
@@ -265,6 +320,7 @@ if [[ -n "$HOSTED_ZONE_ID" && "$HOSTED_ZONE_ID" != "None" ]]; then
     ok "DNS validation records cleaned up"
   fi
 fi
+fi  # end ACM/Route53 validation cleanup (self-signed vs Route53)
 
 # ─── Verify ───────────────────────────────────────────────────────────────────
 

@@ -36,6 +36,8 @@ export interface ClinicalNotePanelProps {
   patientName?: string | null;
   sessionEnded?: boolean;
   onNewSession?: () => void;
+  /** Called when the clinician discards the note without submitting to the EMR. */
+  onReset?: () => void;
 }
 
 /**
@@ -54,10 +56,12 @@ export function ClinicalNotePanel({
   patientName = null,
   sessionEnded = false,
   onNewSession,
+  onReset,
 }: ClinicalNotePanelProps) {
   const [editedSections, setEditedSections] = useState<Record<string, string>>({});
   const [submissionState, setSubmissionState] = useState<SubmissionState>({ status: 'idle' });
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
 
   // Initialize editedSections when clinicalNote becomes available
   useEffect(() => {
@@ -130,6 +134,19 @@ export function ClinicalNotePanel({
 
   const handleRetry = () => {
     handleConfirm();
+  };
+
+  const handleDiscardClick = () => {
+    setShowDiscardDialog(true);
+  };
+
+  const handleDiscardConfirm = () => {
+    setShowDiscardDialog(false);
+    onReset?.();
+  };
+
+  const handleDiscardCancel = () => {
+    setShowDiscardDialog(false);
   };
 
   if (isLoading || !clinicalNote) {
@@ -240,19 +257,31 @@ export function ClinicalNotePanel({
         </div>
       )}
 
-      {/* Submit to EMR Button */}
-      {sessionEnded && clinicalNote && (
-        <button
-          type="button"
-          onClick={handleSubmitClick}
-          disabled={!isSubmitEnabled}
-          className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Submit to EMR
-        </button>
+      {/* Submit / Discard Buttons */}
+      {sessionEnded && clinicalNote && submissionState.status !== 'success' && (
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={handleSubmitClick}
+            disabled={!isSubmitEnabled}
+            className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Submit to EMR
+          </button>
+          {onReset && (
+            <button
+              type="button"
+              onClick={handleDiscardClick}
+              disabled={submissionState.status === 'submitting'}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Discard
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Confirmation Dialog */}
+      {/* Submit Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showConfirmDialog}
         patientName={patientName || 'Unknown Patient'}
@@ -260,6 +289,43 @@ export function ClinicalNotePanel({
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
+
+      {/* Discard Confirmation Dialog */}
+      {showDiscardDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="discard-dialog-title"
+        >
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 id="discard-dialog-title" className="text-lg font-semibold text-gray-900">
+              Discard clinical note?
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              This note has not been submitted to the EMR. Discarding will clear the
+              transcript and generated note and return you to patient selection. This
+              cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleDiscardCancel}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardConfirm}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
