@@ -4,6 +4,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Aspects } from 'aws-cdk-lib';
 import { HIPAASecurityChecks } from 'cdk-nag';
 import { DemoAppStack } from '../lib/demo-app-stack';
+import { CertStack } from '../lib/cert-stack';
 
 const SUPPORTED_REGIONS = ['us-east-1', 'us-west-2'];
 
@@ -25,13 +26,39 @@ if (targetRegion && !SUPPORTED_REGIONS.includes(targetRegion)) {
 
 const openemrStackName = app.node.tryGetContext('openemrStackName') ?? 'OpenEMRStack';
 const allowedCidr = app.node.tryGetContext('allowedCidr') ?? '10.0.0.0/8';
+// DEMO-ONLY: skip upstream TLS verification (self-signed deployments only).
+const allowSelfSignedUpstream =
+  app.node.tryGetContext('allowSelfSignedUpstream') === true ||
+  app.node.tryGetContext('allowSelfSignedUpstream') === 'true';
 
 new DemoAppStack(app, 'DemoAppStack', {
   env,
   openemrStackName,
   allowedCidr,
+  allowSelfSignedUpstream,
   description: 'Ambient Clinical Documentation Demo Application Stack',
 });
+
+// --- CertStack (self-signed mode only) ---
+// Generates a self-signed certificate in-cloud (custom-resource Lambda) and
+// publishes its ARN to SSM, removing the local `openssl` dependency. Only
+// synthesized when `selfSignedCert` context is set (deploy.sh --self-signed),
+// so the Route53 flow is unaffected.
+const selfSignedCert =
+  app.node.tryGetContext('selfSignedCert') === true ||
+  app.node.tryGetContext('selfSignedCert') === 'true';
+if (selfSignedCert) {
+  const certCommonName = app.node.tryGetContext('certCommonName') ?? '*.ambient-demo.local';
+  const certSans = app.node.tryGetContext('certSans') ?? certCommonName;
+  const certSsmParam = app.node.tryGetContext('certSsmParam') ?? '/AmbientDemo/SelfSignedCertArn';
+  new CertStack(app, 'CertStack', {
+    env,
+    commonName: certCommonName,
+    subjectAltNames: certSans,
+    ssmParameterName: certSsmParam,
+    description: 'Self-signed certificate generator for the Ambient Demo (self-signed mode)',
+  });
+}
 
 // --- cdk-nag HIPAA Security Checks ---
 // Enable HIPAA Security rule pack on the entire CDK app.

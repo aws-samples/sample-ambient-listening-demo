@@ -34,6 +34,12 @@ export interface DemoAppStackProps extends cdk.StackProps {
   domain?: string;
   /** VPC ID to deploy into (imports existing VPC instead of creating a new one) */
   vpcId?: string;
+  /**
+   * DEMO-ONLY: when true, the app skips TLS certificate verification on upstream
+   * calls to the OpenEMR FHIR API. Required for --self-signed deployments where
+   * OpenEMR presents a self-signed certificate. Never enable for production.
+   */
+  allowSelfSignedUpstream?: boolean;
 }
 
 /**
@@ -494,6 +500,14 @@ export class DemoAppStack extends cdk.Stack {
     // Connect Health domain name (use existing domain from context, or generate a default name)
     const connectHealthDomainName = this.node.tryGetContext('connectHealthDomainName') || `${id}-ambient-domain`;
 
+    // DEMO-ONLY: whether to skip upstream TLS verification for OpenEMR calls.
+    // Resolved from props or CDK context. Defaults to false (verification enabled).
+    // Only the --self-signed deploy path sets this to true; never enable for production.
+    const allowSelfSignedUpstream =
+      props.allowSelfSignedUpstream ??
+      (this.node.tryGetContext('allowSelfSignedUpstream') === true ||
+        this.node.tryGetContext('allowSelfSignedUpstream') === 'true');
+
     this.ecsCluster = new ecs.Cluster(this, 'DemoAppCluster', {
       vpc: this.vpc,
       containerInsights: true,
@@ -535,6 +549,9 @@ export class DemoAppStack extends cdk.Stack {
         CONNECT_HEALTH_DOMAIN_NAME: connectHealthDomainName,
         FHIR_CREDENTIALS_SECRET_NAME: this.fhirApiCredentials.secretName,
         DB_SECRET_ARN: ssm.StringParameter.valueForStringParameter(this, `/${openemrStackName}/DatabaseSecretArn`),
+        // DEMO-ONLY: set only for --self-signed deployments so the app can reach the
+        // OpenEMR FHIR API over its self-signed certificate. Never set in production.
+        ...(allowSelfSignedUpstream ? { ALLOW_SELF_SIGNED_UPSTREAM: 'true' } : {}),
       },
       secrets: {
         DB_CREDENTIALS: ecs.Secret.fromSecretsManager(this.dbCredentials),
@@ -659,7 +676,7 @@ const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client
 exports.handler = async (event) => {
   if (event.RequestType === 'Delete') return { PhysicalResourceId: event.PhysicalResourceId };
 
-  const { UserPoolId, SecretArn } = event.ResourceProperties;
+  const { UserPoolId, SecretArn, ClientId, AlbDnsName } = event.ResourceProperties;
   const region = process.env.AWS_REGION;
 
   const smClient = new SecretsManagerClient({ region });
@@ -689,13 +706,44 @@ exports.handler = async (event) => {
     Permanent: true,
   }));
 
+  // Fix the app client's callback/logout URLs when there is no custom domain
+  // (self-signed mode). The ALB lowercases the host in its OAuth redirect_uri,
+  // but the CDK-registered callback used the mixed-case ALB DNS token, so
+  // Cognito's exact-match rejects the login ("Client is not enabled for OAuth2.0
+  // flows"). Re-register the URLs using the lowercased host so they match.
+  if (ClientId && AlbDnsName) {
+    const { DescribeUserPoolClientCommand, UpdateUserPoolClientCommand } =
+      require('@aws-sdk/client-cognito-identity-provider');
+    const host = String(AlbDnsName).toLowerCase();
+    const existing = await cognitoClient.send(new DescribeUserPoolClientCommand({
+      UserPoolId, ClientId,
+    }));
+    const c = existing.UserPoolClient || {};
+    await cognitoClient.send(new UpdateUserPoolClientCommand({
+      UserPoolId,
+      ClientId,
+      AllowedOAuthFlows: c.AllowedOAuthFlows,
+      AllowedOAuthFlowsUserPoolClient: c.AllowedOAuthFlowsUserPoolClient,
+      AllowedOAuthScopes: c.AllowedOAuthScopes,
+      SupportedIdentityProviders: c.SupportedIdentityProviders,
+      ExplicitAuthFlows: c.ExplicitAuthFlows,
+      CallbackURLs: ['https://' + host + '/oauth2/idpresponse'],
+      LogoutURLs: ['https://' + host],
+    }));
+  }
+
   return { PhysicalResourceId: creds.username };
 };
       `),
     });
 
     createUserFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:AdminCreateUser', 'cognito-idp:AdminSetUserPassword'],
+      actions: [
+        'cognito-idp:AdminCreateUser',
+        'cognito-idp:AdminSetUserPassword',
+        'cognito-idp:DescribeUserPoolClient',
+        'cognito-idp:UpdateUserPoolClient',
+      ],
       resources: [userPool.userPoolArn],
     }));
     clinicianCredentials.grantRead(createUserFn);
@@ -709,6 +757,15 @@ exports.handler = async (event) => {
       properties: {
         UserPoolId: userPool.userPoolId,
         SecretArn: clinicianCredentials.secretArn,
+        // When there is no custom domain (self-signed mode), pass the client ID and
+        // ALB DNS name so the custom resource can re-register lowercase callback/
+        // logout URLs that match what the ALB actually sends to Cognito. With a
+        // custom domain the callback is already a stable lowercase hostname, so we
+        // leave the URLs untouched.
+        ...(ambientDomain ? {} : {
+          ClientId: userPoolClient.userPoolClientId,
+          AlbDnsName: this.alb.loadBalancerDnsName,
+        }),
       },
     });
 

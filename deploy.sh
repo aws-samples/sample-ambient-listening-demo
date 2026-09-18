@@ -32,6 +32,7 @@ DOMAIN=""
 CONNECT_HEALTH_DOMAIN=""
 SKIP_OPENEMR=false
 SKIP_DATA_LOAD=false
+SELF_SIGNED=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Parse Arguments ──────────────────────────────────────────────────────────
@@ -43,17 +44,31 @@ while [[ $# -gt 0 ]]; do
     --region) REGION="$2"; shift 2 ;;
     --skip-openemr) SKIP_OPENEMR=true; shift ;;
     --skip-data-load) SKIP_DATA_LOAD=true; shift ;;
+    --self-signed) SELF_SIGNED=true; shift ;;
     -h|--help)
-      echo "Usage: ./deploy.sh --domain <route53-domain> --connect-health-domain <name> [--region REGION] [--skip-openemr] [--skip-data-load]"
+      echo "Usage:"
+      echo "  Route53 mode:     ./deploy.sh --domain <route53-domain> --connect-health-domain <name> [options]"
+      echo "  Self-signed mode: ./deploy.sh --self-signed --connect-health-domain <name> [options]"
       echo ""
-      echo "Required:"
+      echo "Required (Route53 mode):"
       echo "  --domain DOMAIN                   Route53 hosted zone domain (e.g., hda.example.people.aws.dev)"
       echo "  --connect-health-domain NAME      Amazon Connect Health domain name (created via console)"
       echo ""
+      echo "Required (self-signed mode):"
+      echo "  --self-signed                     Generate and import a self-signed certificate into ACM."
+      echo "                                    No Route53 hosted zone or public domain is required."
+      echo "                                    Access is via the ALB DNS names over HTTPS."
+      echo "  --connect-health-domain NAME      Amazon Connect Health domain name (created via console)"
+      echo ""
       echo "Options:"
+      echo "  --domain DOMAIN     (self-signed mode, optional) Common Name to embed in the self-signed cert"
       echo "  --region REGION     AWS region (default: us-east-1, must be us-east-1 or us-west-2)"
       echo "  --skip-openemr      Skip OpenEMR stack deployment (if already deployed)"
       echo "  --skip-data-load    Skip synthetic patient data loading"
+      echo ""
+      echo "Note: Self-signed certificates are NOT trusted by browsers. Users will see a"
+      echo "      security warning and must manually proceed. Use --self-signed for quick"
+      echo "      demos/testing only, not for shared or production environments."
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -83,11 +98,23 @@ echo ""
 
 log "Running preflight checks..."
 
-# Validate domain is provided
-if [[ -z "$DOMAIN" ]]; then
-  fail "Domain is required. Usage: ./deploy.sh --domain <route53-domain> --connect-health-domain <name>"
+# Validate certificate strategy
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  # Self-signed mode: no Route53 hosted zone required. A domain is optional and
+  # is only used as the certificate Common Name (defaults to a placeholder).
+  if [[ -z "$DOMAIN" ]]; then
+    DOMAIN="ambient-demo.local"
+    ok "Self-signed mode: no domain provided, using CN '$DOMAIN'"
+  else
+    ok "Self-signed mode: using CN '$DOMAIN'"
+  fi
+else
+  # Route53 mode: a real domain backed by a hosted zone is required.
+  if [[ -z "$DOMAIN" ]]; then
+    fail "Domain is required in Route53 mode. Usage: ./deploy.sh --domain <route53-domain> --connect-health-domain <name> (or pass --self-signed)"
+  fi
+  ok "Domain: $DOMAIN"
 fi
-ok "Domain: $DOMAIN"
 
 # Validate Connect Health domain is provided
 if [[ -z "$CONNECT_HEALTH_DOMAIN" ]]; then
@@ -124,16 +151,22 @@ MY_IP=$(curl -s --max-time 5 https://checkip.amazonaws.com 2>/dev/null) || fail 
 MY_CIDR="${MY_IP%.*}.0/24"
 ok "Your IP: $MY_IP (allowing ${MY_CIDR})"
 
-# Verify Route53 hosted zone exists
-HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
-  --dns-name "$DOMAIN" \
-  --query "HostedZones[?Name=='${DOMAIN}.'].Id" \
-  --output text 2>/dev/null | head -1 | sed 's|/hostedzone/||') || true
+# Verify Route53 hosted zone exists (Route53 mode only)
+HOSTED_ZONE_ID=""
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  # No local openssl needed — the self-signed cert is generated in-cloud by CertStack.
+  ok "Self-signed mode: skipping Route53 hosted zone check"
+else
+  HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name \
+    --dns-name "$DOMAIN" \
+    --query "HostedZones[?Name=='${DOMAIN}.'].Id" \
+    --output text 2>/dev/null | head -1 | sed 's|/hostedzone/||') || true
 
-if [[ -z "$HOSTED_ZONE_ID" || "$HOSTED_ZONE_ID" == "None" ]]; then
-  fail "Route53 hosted zone not found for domain: $DOMAIN. Create one first."
+  if [[ -z "$HOSTED_ZONE_ID" || "$HOSTED_ZONE_ID" == "None" ]]; then
+    fail "Route53 hosted zone not found for domain: $DOMAIN. Create one first (or pass --self-signed to skip Route53)."
+  fi
+  ok "Route53 hosted zone: $HOSTED_ZONE_ID"
 fi
-ok "Route53 hosted zone: $HOSTED_ZONE_ID"
 
 # Check CDK bootstrap
 aws cloudformation describe-stacks --stack-name CDKToolkit --region "$REGION" --query 'Stacks[0].StackStatus' --output text >/dev/null 2>&1 || {
@@ -152,6 +185,43 @@ echo ""
 OPENEMR_DOMAIN="openemr.${DOMAIN}"
 DEMO_DOMAIN="ambient.${DOMAIN}"
 WILDCARD_DOMAIN="*.${DOMAIN}"
+
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  # ─── Self-Signed Certificate (generated in-cloud, no local openssl) ─────────
+  # The certificate is generated by a custom-resource Lambda (CertStack) and
+  # imported into ACM — no openssl on this machine and no private key material
+  # ever touches local disk. deploy.sh deploys CertStack, then reads the ARN it
+  # publishes to SSM. Browsers will not trust this cert — users accept the warning.
+  CERT_SSM_PARAM="/AmbientDemo/SelfSignedCertArn"
+  CERT_SANS="${WILDCARD_DOMAIN},${DOMAIN},${OPENEMR_DOMAIN},${DEMO_DOMAIN}"
+
+  log "Generating self-signed certificate in-cloud via CertStack (CN=${WILDCARD_DOMAIN})..."
+
+  (
+    cd "$SCRIPT_DIR/infrastructure/demo-app"
+    npm ci --quiet
+    cdk deploy CertStack \
+      --context "selfSignedCert=true" \
+      --context "certCommonName=${WILDCARD_DOMAIN}" \
+      --context "certSans=${CERT_SANS}" \
+      --context "certSsmParam=${CERT_SSM_PARAM}" \
+      --context "certificateArn=arn:aws:acm:${REGION}:${AWS_ACCOUNT}:certificate/placeholder-for-certstack-synth" \
+      --context "allowedCidr=127.0.0.1/32" \
+      --require-approval never \
+      --region "$REGION" \
+      --exclusively \
+      >/dev/null
+  ) || fail "CertStack deploy (self-signed certificate generation) failed"
+
+  CERT_ARN=$(aws ssm get-parameter --name "$CERT_SSM_PARAM" --region "$REGION" \
+    --query 'Parameter.Value' --output text 2>/dev/null) || true
+  if [[ -z "$CERT_ARN" || "$CERT_ARN" == "None" ]]; then
+    fail "Could not read self-signed certificate ARN from SSM ($CERT_SSM_PARAM) after CertStack deploy"
+  fi
+
+  ok "Self-signed certificate generated in-cloud: $CERT_ARN"
+  warn "This certificate is NOT trusted by browsers. Users will see a security warning."
+else
 
 log "Checking for existing ACM certificate..."
 
@@ -242,6 +312,7 @@ for r in records:
 
   ok "Certificate issued and validated: $CERT_ARN"
 fi
+fi  # end certificate strategy (self-signed vs Route53 ACM)
 
 # ─── Step 1: Deploy OpenEMR Stack ────────────────────────────────────────────
 
@@ -260,13 +331,20 @@ if [[ "$SKIP_OPENEMR" == "false" ]]; then
   source .venv/bin/activate
   pip install -r requirements.txt --quiet
 
-  # Deploy with certificate and domain
+  # In self-signed mode there is no Route53 hosted zone, so do not pass a
+  # route53_domain context (the OpenEMR stack would try to look it up and fail).
+  OPENEMR_ROUTE53_CONTEXT=""
+  if [[ "$SELF_SIGNED" != "true" ]]; then
+    OPENEMR_ROUTE53_CONTEXT="--context route53_domain=${DOMAIN}"
+  fi
+
+  # Deploy with certificate and (in Route53 mode) domain
   cdk deploy \
     --context "security_group_ip_range_ipv4=${MY_CIDR}" \
     --context "activate_openemr_apis=true" \
     --context "rds_deletion_protection=false" \
     --context "certificate_arn=${CERT_ARN}" \
-    --context "route53_domain=${DOMAIN}" \
+    $OPENEMR_ROUTE53_CONTEXT \
     --require-approval never \
     --region "$REGION" \
     --outputs-file "$SCRIPT_DIR/.openemr-outputs.json" \
@@ -337,8 +415,73 @@ fi
 
 ok "SSM parameters published"
 
-# Update Route53 record for OpenEMR to point to the current ALB
-log "Updating OpenEMR DNS record..."
+# ─── WAF: allow OpenEMR auth endpoints ───────────────────────────────────────
+# The OpenEMR stack fronts its ALB with an AWS WAF whose managed rule groups
+# (CommonRuleSet / SQLi) false-positive on auth POST bodies — the admin password
+# and OAuth2 password-grant fields can contain character sequences the rules flag
+# as injection, returning 403 before the request reaches OpenEMR. That breaks both
+# the browser admin login and the demo app's FHIR OAuth token request.
+#
+# We add a top-priority (0) "AllowAuthEndpoints" rule that explicitly ALLOWS the
+# OAuth token path and the login POST paths, so the managed rules never evaluate
+# (and never block) them. Scope is narrow — every other path keeps full WAF
+# protection. This is done here (post-deploy, via the API) rather than in the
+# OpenEMR CDK because that stack lives in a pinned upstream submodule we do not
+# modify. Idempotent: re-running skips if the rule already exists.
+log "Ensuring OpenEMR WAF allows auth endpoints (prevents 403 on login / OAuth)..."
+WAF_ACL_NAME="${OPENEMR_STACK_NAME}-waf-acl"
+WAF_INFO=$(aws wafv2 list-web-acls --scope REGIONAL --region "$REGION" \
+  --query "WebACLs[?Name=='${WAF_ACL_NAME}'].{Id:Id}" --output text 2>/dev/null) || true
+if [[ -n "$WAF_INFO" && "$WAF_INFO" != "None" ]]; then
+  WAF_ID="$WAF_INFO"
+  aws wafv2 get-web-acl --scope REGIONAL --region "$REGION" --id "$WAF_ID" --name "$WAF_ACL_NAME" > /tmp/openemr-webacl.json 2>/dev/null || true
+  # Build the update input with a priority-0 allow rule for auth paths (idempotent).
+  python3 - "$WAF_ACL_NAME" "$WAF_ID" <<'PYWAF' > /tmp/openemr-webacl-update.json 2>/dev/null || true
+import json, sys, base64
+name, wid = sys.argv[1], sys.argv[2]
+d = json.load(open('/tmp/openemr-webacl.json'))
+acl = d['WebACL']
+rules = acl.get('Rules', [])
+if any(r.get('Name') == 'AllowAuthEndpoints' for r in rules):
+    print(''); sys.exit(0)   # already present -> empty output signals "skip"
+def bm(s, constraint):
+    return {"ByteMatchStatement": {
+        "SearchString": base64.b64encode(s.encode()).decode(),
+        "FieldToMatch": {"UriPath": {}},
+        "TextTransformations": [{"Priority": 0, "Type": "LOWERCASE"}],
+        "PositionalConstraint": constraint}}
+allow_rule = {
+  "Name": "AllowAuthEndpoints", "Priority": 0,
+  "Statement": {"OrStatement": {"Statements": [
+      bm("/oauth2/", "STARTS_WITH"),
+      bm("/interface/main/main_screen.php", "CONTAINS"),
+      bm("/interface/main/main.php", "CONTAINS"),
+  ]}},
+  "Action": {"Allow": {}},
+  "VisibilityConfig": {"SampledRequestsEnabled": True, "CloudWatchMetricsEnabled": True,
+                       "MetricName": "AllowAuthEndpointsMetric"}}
+rules.insert(0, allow_rule)
+out = {"Name": acl['Name'], "Scope": "REGIONAL", "Id": acl['Id'],
+       "DefaultAction": acl['DefaultAction'], "Description": acl.get('Description', 'OpenEMR WAF'),
+       "Rules": rules, "VisibilityConfig": acl['VisibilityConfig'], "LockToken": d['LockToken']}
+if 'CustomResponseBodies' in acl: out['CustomResponseBodies'] = acl['CustomResponseBodies']
+json.dump(out, sys.stdout)
+PYWAF
+  if [[ -s /tmp/openemr-webacl-update.json ]]; then
+    aws wafv2 update-web-acl --scope REGIONAL --region "$REGION" \
+      --cli-input-json file:///tmp/openemr-webacl-update.json >/dev/null 2>&1 \
+      && ok "WAF allow-rule for auth endpoints added" \
+      || warn "Could not update OpenEMR WAF (login/OAuth may hit 403 if password has special chars)"
+  else
+    ok "WAF allow-rule for auth endpoints already present"
+  fi
+  rm -f /tmp/openemr-webacl.json /tmp/openemr-webacl-update.json
+else
+  warn "OpenEMR WAF WebACL '${WAF_ACL_NAME}' not found — skipping auth allow-rule"
+fi
+
+# Update Route53 record for OpenEMR to point to the current ALB.
+# Always capture the ALB DNS name (used for the summary in self-signed mode).
 OPENEMR_ALB_DNS=$(aws elbv2 describe-load-balancers --region "$REGION" \
   --query "LoadBalancers[?contains(LoadBalancerName,'Openem')].DNSName" \
   --output text 2>/dev/null) || true
@@ -346,7 +489,10 @@ OPENEMR_ALB_ZONE=$(aws elbv2 describe-load-balancers --region "$REGION" \
   --query "LoadBalancers[?contains(LoadBalancerName,'Openem')].CanonicalHostedZoneId" \
   --output text 2>/dev/null) || true
 
-if [[ -n "$OPENEMR_ALB_DNS" && "$OPENEMR_ALB_DNS" != "None" && -n "$HOSTED_ZONE_ID" ]]; then
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  log "Self-signed mode: skipping OpenEMR DNS record (access via ALB DNS name)"
+elif [[ -n "$OPENEMR_ALB_DNS" && "$OPENEMR_ALB_DNS" != "None" && -n "$HOSTED_ZONE_ID" ]]; then
+  log "Updating OpenEMR DNS record..."
   aws route53 change-resource-record-sets \
     --hosted-zone-id "$HOSTED_ZONE_ID" \
     --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"${OPENEMR_DOMAIN}\",\"Type\":\"A\",\"AliasTarget\":{\"HostedZoneId\":\"${OPENEMR_ALB_ZONE}\",\"DNSName\":\"dualstack.${OPENEMR_ALB_DNS}\",\"EvaluateTargetHealth\":false}}}]}" \
@@ -380,11 +526,25 @@ fi
 # Discover existing Connect Health domain (must be created via console before deploy)
 CONNECT_HEALTH_CONTEXT="--context connectHealthDomainName=${CONNECT_HEALTH_DOMAIN}"
 
+# In self-signed mode there is no Route53 hosted zone. Omit the domain context so
+# the Demo App stack skips the HostedZone lookup / A-record and falls back to the
+# ALB DNS name for the Cognito callback URL.
+DEMO_DOMAIN_CONTEXT=""
+SELF_SIGNED_CONTEXT=""
+if [[ "$SELF_SIGNED" != "true" ]]; then
+  DEMO_DOMAIN_CONTEXT="--context domain=${DEMO_DOMAIN}"
+else
+  # DEMO-ONLY: OpenEMR presents a self-signed cert, so allow the app to skip
+  # upstream TLS verification for FHIR API calls. Not for production use.
+  SELF_SIGNED_CONTEXT="--context allowSelfSignedUpstream=true"
+fi
+
 cdk deploy \
   --context "allowedCidr=${MY_CIDR}" \
   --context "openemrStackName=OpenEmrStack" \
   --context "certificateArn=${CERT_ARN}" \
-  --context "domain=${DEMO_DOMAIN}" \
+  $DEMO_DOMAIN_CONTEXT \
+  $SELF_SIGNED_CONTEXT \
   $VPC_CONTEXT \
   $CONNECT_HEALTH_CONTEXT \
   --require-approval never \
@@ -547,7 +707,6 @@ if [[ "$SKIP_DATA_LOAD" == "false" ]]; then
   fi
 
   # Update Route53 record for Demo App to point to the current ALB
-  log "Updating Demo App DNS record..."
   DEMO_ALB_DNS=$(aws elbv2 describe-load-balancers --region "$REGION" \
     --query "LoadBalancers[?contains(LoadBalancerName,'DemoAp')].DNSName" \
     --output text 2>/dev/null) || true
@@ -555,7 +714,10 @@ if [[ "$SKIP_DATA_LOAD" == "false" ]]; then
     --query "LoadBalancers[?contains(LoadBalancerName,'DemoAp')].CanonicalHostedZoneId" \
     --output text 2>/dev/null) || true
 
-  if [[ -n "$DEMO_ALB_DNS" && "$DEMO_ALB_DNS" != "None" && -n "$HOSTED_ZONE_ID" ]]; then
+  if [[ "$SELF_SIGNED" == "true" ]]; then
+    log "Self-signed mode: skipping Demo App DNS record (access via ALB DNS name)"
+  elif [[ -n "$DEMO_ALB_DNS" && "$DEMO_ALB_DNS" != "None" && -n "$HOSTED_ZONE_ID" ]]; then
+    log "Updating Demo App DNS record..."
     aws route53 change-resource-record-sets \
       --hosted-zone-id "$HOSTED_ZONE_ID" \
       --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"${DEMO_DOMAIN}\",\"Type\":\"A\",\"AliasTarget\":{\"HostedZoneId\":\"${DEMO_ALB_ZONE}\",\"DNSName\":\"dualstack.${DEMO_ALB_DNS}\",\"EvaluateTargetHealth\":false}}}]}" \
@@ -576,19 +738,37 @@ echo "  Deployment Complete!"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
-APP_URL="https://${DEMO_DOMAIN}"
-OPENEMR_URL="https://${OPENEMR_DOMAIN}"
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  # No DNS records were created; access is via the raw ALB DNS names.
+  DEMO_ALB_DNS=$(aws elbv2 describe-load-balancers --region "$REGION" \
+    --query "LoadBalancers[?contains(LoadBalancerName,'DemoAp')].DNSName" \
+    --output text 2>/dev/null | head -1) || true
+  APP_URL="https://${DEMO_ALB_DNS}"
+  OPENEMR_URL="https://${OPENEMR_ALB_DNS}"
+else
+  APP_URL="https://${DEMO_DOMAIN}"
+  OPENEMR_URL="https://${OPENEMR_DOMAIN}"
+fi
 
 echo -e "  ${GREEN}Demo App URL:${NC}     $APP_URL"
 echo -e "  ${GREEN}OpenEMR URL:${NC}      $OPENEMR_URL"
 echo -e "  ${GREEN}Region:${NC}           $REGION"
 echo -e "  ${GREEN}Account:${NC}          $AWS_ACCOUNT"
 echo -e "  ${GREEN}Certificate:${NC}      $CERT_ARN"
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  echo ""
+  echo -e "  ${YELLOW}Self-signed certificate:${NC} browsers will show a security warning."
+  echo    "  Open the URL, then accept/proceed past the warning to reach the app."
+fi
 echo ""
 echo "  Estimated cost: ~\$0.50-0.65/hr while running"
 echo ""
 echo "  To destroy all resources:"
-echo "    ./destroy.sh --domain $DOMAIN --region $REGION"
+if [[ "$SELF_SIGNED" == "true" ]]; then
+  echo "    ./destroy.sh --self-signed --region $REGION"
+else
+  echo "    ./destroy.sh --domain $DOMAIN --region $REGION"
+fi
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 

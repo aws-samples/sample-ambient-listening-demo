@@ -88,15 +88,63 @@ const MIN_TLS_VERSION = 'TLSv1.2';
 /** Default Secrets Manager secret name for FHIR client credentials. */
 const DEFAULT_SECRET_NAME = process.env.FHIR_CREDENTIALS_SECRET_NAME || 'openemr/fhir-client-credentials';
 
+/**
+ * DEMO-ONLY: When 'true', the upstream OpenEMR TLS certificate is NOT verified.
+ *
+ * This exists solely to support the `--self-signed` deployment mode, where the
+ * OpenEMR ALB presents a self-signed certificate that no public CA trusts.
+ * It is OFF by default and MUST remain off for any trusted/production deployment,
+ * because disabling verification exposes the FHIR connection to man-in-the-middle
+ * attacks. It is set only by the self-signed deploy path (see deploy.sh --self-signed).
+ */
+const ALLOW_SELF_SIGNED_UPSTREAM = process.env.ALLOW_SELF_SIGNED_UPSTREAM === 'true';
+
+// ─── Self-signed upstream handling (DEMO-ONLY) ────────────────────────────────
+//
+// Node's built-in fetch() is backed by undici, which IGNORES the https.Agent
+// `agent` option — so a plain https.Agent with rejectUnauthorized:false does NOT
+// relax TLS for fetch(), neither for the OAuth token request nor resource calls.
+// The only reliable, dependency-free way to relax TLS for every fetch() is to
+// disable Node's global TLS rejection. This is process-wide, but is reached ONLY
+// when the demo-only ALLOW_SELF_SIGNED_UPSTREAM flag is set; the trusted/production
+// path never runs this and keeps certificate verification fully enabled.
+//
+// Runs at most once, at module load, before any request is made.
+let selfSignedUpstreamConfigured = false;
+function configureSelfSignedUpstreamOnce(): void {
+  if (!ALLOW_SELF_SIGNED_UPSTREAM || selfSignedUpstreamConfigured) {
+    return;
+  }
+  selfSignedUpstreamConfigured = true;
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[fhir-client] WARNING: ALLOW_SELF_SIGNED_UPSTREAM=true — upstream TLS ' +
+      'certificate verification is DISABLED for all fetch() calls. This is for ' +
+      'self-signed demo deployments only and must not be used in production.'
+  );
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
+// Configure immediately at module load so it applies before any request is made.
+configureSelfSignedUpstreamOnce();
+
 // ─── HTTPS Agent ─────────────────────────────────────────────────────────────
 
 /**
  * Creates an HTTPS agent that enforces TLS 1.2+ for all connections.
+ *
+ * Certificate verification (`rejectUnauthorized`) is enabled by default. It is
+ * only disabled when ALLOW_SELF_SIGNED_UPSTREAM=true, which is a demo-only escape
+ * hatch for the self-signed deployment mode and must never be set in production.
+ * Note: for Node's built-in fetch(), the actual TLS relaxation is applied via the
+ * undici global dispatcher above; this agent is retained for any https callers.
  */
 function createTlsAgent(): https.Agent {
   return new https.Agent({
     minVersion: MIN_TLS_VERSION,
     keepAlive: true,
+    // Verify the upstream certificate unless explicitly opted out for self-signed demos.
+    rejectUnauthorized: !ALLOW_SELF_SIGNED_UPSTREAM,
   });
 }
 
@@ -215,6 +263,47 @@ export class FHIRClient {
     return this.fetchBundleResources<any>(
       `/DocumentReference?patient=${patientId}&_sort=-date&_count=10`
     );
+  }
+
+  /**
+   * Writes a FHIR DocumentReference (clinical note) back to OpenEMR.
+   *
+   * Uses the authenticated OAuth2 flow (the token scope includes
+   * user/DocumentReference.write) and the shared TLS-aware, timed request path,
+   * so it works against self-signed OpenEMR endpoints and never hangs
+   * indefinitely (10s timeout).
+   *
+   * @returns the created document id on success.
+   */
+  async writeDocumentReference(
+    documentReference: unknown
+  ): Promise<FHIRFetchResult<{ id: string }>> {
+    try {
+      const headers = await this.buildHeaders(true);
+      const url = `${this.fhirBaseUrl}/DocumentReference`;
+
+      const response = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(documentReference),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        return {
+          success: false,
+          error: `FHIR write failed: ${response.status} ${response.statusText} - ${errorText}`,
+        };
+      }
+
+      const result = (await response.json().catch(() => ({}))) as { id?: string };
+      return { success: true, data: { id: result.id ?? 'unknown' } };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**

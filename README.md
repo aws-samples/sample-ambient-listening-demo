@@ -28,11 +28,14 @@ git clone --recurse-submodules https://github.com/<org>/amazon-connect-health-am
 cd amazon-connect-health-ambient
 npm install  # All dependencies use exact version pins in package.json
 
-# Deploy to AWS (requires Route53 hosted zone)
-./deploy.sh --domain your-domain.example.com
+# Deploy to AWS with a Route53 domain (trusted HTTPS)
+./deploy.sh --domain your-domain.example.com --connect-health-domain your-ch-domain
+
+# Or deploy without Route53 using a self-signed certificate (browser warning)
+./deploy.sh --self-signed --connect-health-domain your-ch-domain
 
 # Tear down when done
-./destroy.sh --domain your-domain.example.com
+./destroy.sh --domain your-domain.example.com   # or: ./destroy.sh --self-signed
 ```
 
 For step-by-step manual deployment, see the **[Workshop Guide](docs/WORKSHOP.md)**.
@@ -81,45 +84,74 @@ git submodule update --init --recursive
 - AWS CLI 2.15+ configured with appropriate credentials
 - Docker (for CDK asset bundling)
 - AWS account with **us-east-1** or **us-west-2** region access
-- **A Route53 hosted zone** for your domain (used for HTTPS certificate creation)
+- **A Route53 hosted zone** for your domain (used for HTTPS certificate creation) — *or* deploy with `--self-signed` to skip Route53 entirely (see [Deploy](#deploy)). Self-signed mode requires `openssl` (preinstalled on macOS and most Linux distros).
 - **Amazon Connect Health environment** — You must have Amazon Connect Health enabled in your AWS account before deployment. Contact your AWS account team or request access through the AWS console. The service must be available in your target region (us-east-1 or us-west-2).
 
 ## Deploy
 
-Deploy the entire demo with a single command:
+There are two ways to obtain the HTTPS certificate the load balancers require. Pick one.
+
+### Option 1 — Route53 domain (trusted certificate, recommended)
+
+Deploy with a domain backed by a Route53 hosted zone. The script requests a DNS-validated ACM certificate and creates the `ambient.<domain>` / `openemr.<domain>` DNS records automatically.
 
 ```bash
-./deploy.sh --domain <your-route53-domain>
+./deploy.sh --domain <your-route53-domain> --connect-health-domain <your-ch-domain>
 ```
 
 Example:
 ```bash
-./deploy.sh --domain hda.example.people.aws.dev
+./deploy.sh --domain hda.example.people.aws.dev --connect-health-domain ambient-demo
 ```
 
-The script will:
-1. Validate prerequisites (tools, credentials, Route53 hosted zone)
-2. Create an ACM wildcard certificate for your domain (DNS-validated automatically)
+### Option 2 — Self-signed certificate (no Route53 required)
+
+Deploy without a Route53 hosted zone or a public domain. The script generates a self-signed certificate with `openssl`, imports it into ACM, and the app is reached over HTTPS at the raw load balancer DNS names printed at the end of the deployment.
+
+```bash
+./deploy.sh --self-signed --connect-health-domain <your-ch-domain>
+```
+
+> **⚠️ Self-signed mode is for local/demo/testing use only — never for production.** It is not covered by any security review and deliberately weakens TLS trust (see below). Use Option 1 with a real Route53 domain for anything shared or production-bound.
+
+**What self-signed mode does differently:**
+
+- **Browser trust warning**: A self-signed certificate is **not** trusted by browsers. When you open the app URL you will see a security warning ("Your connection is not private" / `NET::ERR_CERT_AUTHORITY_INVALID`) and must click through to proceed. This is expected.
+- **Upstream TLS verification is disabled**: Because OpenEMR's load balancer also serves a self-signed certificate, the app is deployed with `ALLOW_SELF_SIGNED_UPSTREAM=true`. This makes the backend skip TLS certificate verification on its calls to the OpenEMR FHIR API. Without it, patient-context fetch and FHIR write-back would fail against the self-signed OpenEMR endpoint. This flag is set **only** by `--self-signed` and defaults to off; enabling it exposes the FHIR connection to man-in-the-middle attacks and must never be used in production.
+- **Optional CN**: You may pass `--domain <name>` alongside `--self-signed` to set the certificate's Common Name; it is cosmetic and no Route53 zone is looked up.
+
+In the trusted Route53 flow (Option 1), certificate verification stays fully enabled end to end and `ALLOW_SELF_SIGNED_UPSTREAM` is never set.
+
+### What the script does
+
+1. Validate prerequisites (tools, credentials, and — in Route53 mode — the hosted zone)
+2. Provision the HTTPS certificate: a DNS-validated ACM certificate (Route53 mode) or an imported self-signed certificate (self-signed mode)
 3. Deploy the OpenEMR stack (~35 min)
 4. Deploy the Demo App stack (~15 min)
 5. Configure database access between stacks
-6. Load 100 synthetic patients with clinical notes (including Margaret Smith demo patient)
-7. Register and enable the OAuth2 API client for EHR write-back
+6. In Route53 mode, create the `ambient.<domain>` / `openemr.<domain>` DNS records (skipped in self-signed mode)
+7. Load 100 synthetic patients with clinical notes (including Margaret Smith demo patient)
+8. Register and enable the OAuth2 API client for EHR write-back
 
 Options:
+- `--self-signed` — Skip Route53 and use a self-signed certificate (see Option 2)
 - `--region REGION` — Deploy to us-west-2 instead of us-east-1
 - `--skip-openemr` — Skip OpenEMR if already deployed
 - `--skip-data-load` — Skip synthetic data loading
 
 ## Destroy
 
-Remove all resources and stop incurring costs:
+Remove all resources and stop incurring costs. Use the flag that matches how you deployed:
 
 ```bash
+# Route53 deployment
 ./destroy.sh --domain <your-route53-domain>
+
+# Self-signed deployment
+./destroy.sh --self-signed
 ```
 
-This destroys both CDK stacks, deletes the ACM certificate, and cleans up DNS validation records.
+This destroys both CDK stacks and deletes the certificate. In Route53 mode it also cleans up the `ambient.`/`openemr.` A records and ACM DNS validation records. In self-signed mode it removes the imported self-signed certificate once it is no longer in use.
 
 ## Security & Compliance
 
@@ -134,6 +166,8 @@ This demo follows HIPAA security best practices:
 - **S3 hardening**: Block all public access, SSL-only bucket policy, SSE-KMS
 
 > **Important**: This demo uses **synthetic patient data only** (Synthea-generated). A Business Associate Agreement (BAA) with AWS is required for production use with real PHI.
+
+> **⚠️ Self-signed deployment mode is NOT for production.** The `--self-signed` option (see [Deploy → Option 2](#option-2--self-signed-certificate-no-route53-required)) is provided only for local demos and testing. It uses an untrusted certificate and sets `ALLOW_SELF_SIGNED_UPSTREAM=true`, which disables TLS certificate verification on the app's calls to the OpenEMR FHIR API — breaking the "encryption in transit with verified certificates" guarantee above and exposing that connection to man-in-the-middle attacks. For any shared, internet-reachable, or production environment, deploy with a real Route53 domain (Option 1), which keeps certificate verification fully enabled end to end.
 
 ## Responsible AI
 

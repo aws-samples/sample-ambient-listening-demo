@@ -62,29 +62,22 @@ export async function POST(
       sessionDate,
     });
 
-    // Create FHIR client and POST the DocumentReference
+    // Create FHIR client and POST the DocumentReference using the authenticated,
+    // TLS-aware, timed request path. The previous implementation used a raw
+    // unauthenticated fetch with no timeout, which OpenEMR rejected (no Bearer
+    // token) and which could hang the request indefinitely.
     const fhirClient = createFHIRClient({
       fhirBaseUrl: config.openemr.fhirBaseUrl,
       region: config.aws.region,
     });
 
-    // POST to FHIR API
-    const fhirBaseUrl = config.openemr.fhirBaseUrl.replace(/\/$/, '');
-    const response = await fetch(`${fhirBaseUrl}/DocumentReference`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/fhir+json',
-        Accept: 'application/fhir+json',
-      },
-      body: JSON.stringify(documentReference),
-    });
+    const writeResult = await fhirClient.writeDocumentReference(documentReference);
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
+    if (!writeResult.success) {
       return NextResponse.json(
         {
           code: 'FHIR_WRITE_FAILED',
-          message: `FHIR write failed: ${response.status} ${response.statusText} - ${errorText}`,
+          message: writeResult.error ?? 'FHIR write failed',
           retryable: true,
           maxRetries: 3,
         },
@@ -92,15 +85,9 @@ export async function POST(
       );
     }
 
-    const result = await response.json() as { id?: string };
-    const documentId = result.id ?? 'unknown';
-
-    // Suppress unused variable warning — fhirClient is available for authenticated requests
-    void fhirClient;
-
     return NextResponse.json({
       success: true,
-      documentId,
+      documentId: writeResult.data?.id ?? 'unknown',
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
