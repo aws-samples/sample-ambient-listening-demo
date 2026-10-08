@@ -527,13 +527,22 @@ export class DemoAppStack extends cdk.Stack {
       memoryLimitMiB: 2048,
       taskRole: this.ecsTaskRole,
       executionRole: this.ecsTaskExecutionRole,
+      // Match the OpenEMR stack (host-openemr-on-aws-fargate), which hardcodes
+      // ARM64/Graviton. A single build host cannot natively build both an arm64
+      // and an amd64 image, so the Demo App aligns to ARM64 to build alongside
+      // OpenEMR (also cheaper on Graviton Fargate).
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+      },
     });
 
     this.taskDefinition.addContainer('DemoAppContainer', {
       image: ecs.ContainerImage.fromAsset('../../', {
         file: 'Dockerfile',
         exclude: ['infrastructure', '.git', 'node_modules', '.next'],
-        platform: cdk.aws_ecr_assets.Platform.LINUX_AMD64,
+        // Must match the task runtimePlatform above; node:20.18.0-slim base is
+        // multi-arch so no Dockerfile change is required.
+        platform: cdk.aws_ecr_assets.Platform.LINUX_ARM64,
       }),
       portMappings: [
         { containerPort: 3000, protocol: ecs.Protocol.TCP },
