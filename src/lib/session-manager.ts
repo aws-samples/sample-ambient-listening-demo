@@ -151,7 +151,7 @@ const STATUS_TO_ERROR_STAGE: Record<string, ErrorStage> = {
  * Suggested corrective actions for each error stage.
  */
 const SUGGESTED_ACTIONS: Record<ErrorStage, string> = {
-  domain: 'Verify your AWS credentials have connecthealth:CreateDomain and connecthealth:GetDomain permissions, and check that the configured region (us-east-1 or us-west-2) is correct.',
+  domain: 'Create the Amazon Connect Health domain with the exact configured name in the same region (us-east-1 or us-west-2), wait until it is Active, then start the session again.',
   subscription: 'Verify your AWS credentials have connecthealth:CreateSubscription permission and that the domain was created successfully.',
   session: 'Verify the patient context is within the 10KB limit, check that the domain and subscription are active, and ensure your region supports Amazon Connect Health.',
   streaming: 'Check your network connection and ensure the HTTP/2 stream has not timed out. You may need to restart the session.',
@@ -517,8 +517,8 @@ export class SessionManager {
   // ─── Private Methods ─────────────────────────────────────────────────────────
 
   /**
-   * Gets an existing domain by name or creates a new one.
-   * Implements domain reuse by matching on domain name.
+   * Gets the existing domain by name. The app never creates the domain;
+   * if it does not exist, a clear DOMAIN_NOT_FOUND error is thrown.
    *
    * @see Requirements 4.1
    */
@@ -533,8 +533,10 @@ export class SessionManager {
       return existingDomain;
     }
 
-    // Create a new domain if none exists with the configured name
-    return this.client.createDomain(this.config.domainName);
+    throw new Error(
+      `DOMAIN_NOT_FOUND: Amazon Connect Health domain "${this.config.domainName}" was not found. ` +
+      'Create a domain with exactly this name, wait until it is Active, then start the session again.'
+    );
   }
 
   /**
