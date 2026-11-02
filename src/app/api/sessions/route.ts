@@ -18,7 +18,6 @@ import { validateRegion, validateConfig } from '@/lib/config';
 import {
   ConnectHealthClient,
   ListDomainsCommand,
-  CreateDomainCommand,
   CreateSubscriptionCommand,
 } from '@aws-sdk/client-connecthealth';
 
@@ -54,21 +53,29 @@ export async function POST(request: Request) {
     const region = config.aws.region;
     const client = new ConnectHealthClient({ region });
 
-    // Step 1: Get or create domain
+    // Step 1: Look up the Connect Health domain by name.
+    // The app never creates the domain. Creating it is a deliberate admin step
+    // (it enables the service and sets up IAM Identity Center), so if it does not
+    // exist we fail with a clear, actionable error.
     const domainName = config.connectHealth.domainName;
-    let domainId: string;
 
     const listResponse = await client.send(new ListDomainsCommand({}));
     const existingDomain = listResponse.domains?.find(d => d.name === domainName);
 
-    if (existingDomain) {
-      domainId = existingDomain.domainId || '';
-      console.log(`[Sessions] Using existing domain: ${domainId}`);
-    } else {
-      const createResponse = await client.send(new CreateDomainCommand({ name: domainName }));
-      domainId = createResponse.domainId || '';
-      console.log(`[Sessions] Created domain: ${domainId}`);
+    if (!existingDomain?.domainId) {
+      console.warn(`[Sessions] Connect Health domain "${domainName}" not found`);
+      return NextResponse.json(
+        {
+          code: 'DOMAIN_NOT_FOUND',
+          message: `Amazon Connect Health domain "${domainName}" was not found in ${region}. Create a domain with exactly this name, wait until it is Active, then start the session again.`,
+          retryable: true,
+        },
+        { status: 409 }
+      );
     }
+
+    const domainId = existingDomain.domainId;
+    console.log(`[Sessions] Using existing domain: ${domainId}`);
 
     // Step 2: Create subscription
     const subResponse = await client.send(new CreateSubscriptionCommand({ domainId }));

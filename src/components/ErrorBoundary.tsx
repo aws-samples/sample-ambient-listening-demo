@@ -56,7 +56,7 @@ export function classifyError(error: Error): ErrorDetail {
       category: 'session_lifecycle',
       stage: 'domain',
       message,
-      suggestedAction: 'Check IAM permissions for connecthealth:CreateDomain and verify the AWS region is us-east-1 or us-west-2.',
+      suggestedAction: 'Create the Amazon Connect Health domain with the configured name in this region (us-east-1 or us-west-2) and wait until it is Active.',
     };
   }
   if (/subscription/i.test(message) && /(creat|fail|error)/i.test(message)) {
